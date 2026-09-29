@@ -1,0 +1,9 @@
+.DS_Store
+node_modules/
+dist/
+.env
+.idea/
+.vscode/
+
+# Laufzeitdaten mit Passwort-Hashes
+server/data/*.json
