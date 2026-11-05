@@ -1,18 +1,11 @@
-export function handler(req: Request): Response {
-  const url = new URL(req.url);
+import { Hono } from "@hono/hono";
 
-  if (url.pathname === "/api") {
-    return Response.json({
-      message: "Hello, world!",
-      time: new Date().toISOString(),
-    });
-  }
+export const app = new Hono().basePath("/api");
 
-  return new Response("<h1>Welcome to Deno!</h1>", {
-    headers: { "content-type": "text/html" },
-  });
-}
+app.get("/health", (c) =>
+  c.json({ status: "ok", serverZeit: new Date().toISOString() })
+);
 
 if (import.meta.main) {
-  Deno.serve(handler);
+  Deno.serve({ port: 8000 }, app.fetch);
 }
