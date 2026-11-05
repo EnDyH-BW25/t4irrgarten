@@ -1,0 +1,1218 @@
+openapi: 3.0.3
+info:
+  title: Irrgarten-Duell API
+  version: 0.2.0
+  description: |
+    REST-API für das Irrgarten-Duell. Der Server kennt beide Labyrinthe und entscheidet als Schiedsrichter.
+    Das Frontend kennt nur diesen Vertrag.
+
+    **Glossar**
+    - Match: ein einzelnes Spiel zwischen zwei Spielern oder zwischen Spieler und Computer.
+    - Competition: ein Turnier aus mehreren Matches mit 4 Spielern. Der Ersteller ist der Host. Runde 1 lost die Paarungen aus, Runde 2 spielt das Finale (Platz 1 und 2) und das Spiel um Platz 3 und 4. Ein Turnier mit 8 Spielern ist eine spätere Erweiterung.
+    - Spielcode: fünf Zeichen ohne `0`, `O`, `1` und `I`. Ein Duell und eine Competition haben jeweils einen eigenen Code. Der Code des anderen Modus ist ungültig.
+    - Anfrage: Der Spieler nennt ein Zielfeld in seiner Zeile oder Spalte. Der Server antwortet mit `ja`, `nurBis`, `nein` oder `schatzGefunden`.
+    - Zug: alle Anfragen eines Spielers hintereinander. Ein `ja` setzt den Zug fort. `nein`, `nurBis` und der Schatzfund beenden ihn.
+
+    **Koordinaten**
+    - Zelle: Buchstabe für die Zeile (A-F, von oben nach unten), Zahl für die Spalte (1-6, von links nach rechts), zum Beispiel `"C4"`. A1 liegt links oben, F6 rechts unten. Das Raster hat 6x6 Zellen.
+    - Mauer: zwei benachbarte Zellen, durch Unterstrich getrennt, zum Beispiel `"A1_A2"`. Die Außenwände sind implizit.
+
+    **Spielregeln für die Live-Abfrage**
+    - Das Frontend ruft `GET /matches/{id}` alle 1-2 Sekunden ab und übergibt `since=<version>`. Bei unverändertem Stand antwortet der Server mit 304.
+    - Jede Antwort enthält die Uhrzeit des Servers (`serverZeit`). Das Frontend berechnet Restzeiten aus den Fristfeldern und der Serverzeit. Der Server prüft Fristen bei jedem Abruf und führt fällige Aktionen aus.
+    - Aufbau: drei Minuten ab Beitritt des Gegners, im Modus `computer` ab Anlage des Matches. Danach setzt der Server offene Labyrinthe selbst. Fehlt der Schatz, wählt er zufällig eine von A1 erreichbare Zelle außer A1.
+    - Nachbesserung: Ist der Schatz bei Fristende nicht erreichbar, bekommt der Spieler eine weitere Minute. Der Gegner sieht nur den Hinweis, dass der Spieler überarbeitet. Danach öffnet der Server zufällig eine markierte Mauer, bis der Schatz erreichbar ist, und setzt das Labyrinth.
+    - Bereitschaft: Haben beide Spieler gesetzt, bestätigen beide innerhalb von 30 Sekunden mit `POST /matches/{id}/ready`. Bestätigt nur ein Spieler, gewinnt er. Bestätigt keiner, endet das Match als `abgebrochen` ohne Ergebnis.
+    - Wer 15 Sekunden nicht abruft oder in seinem Zug 60 Sekunden keine Anfrage stellt, verliert. Aufgeben zählt als Niederlage.
+    - Ein Match lässt sich nicht pausieren. Laufende Matches leben im Speicher des Servers. Ein Neustart beendet sie.
+
+    **Spielregeln für Competitions**
+    - Der Host legt die Competition an und gibt den Spielcode weiter. Die Teilnehmer treten mit dem Code bei und sehen den Warteraum.
+    - Der Host startet ab 3 Teilnehmern. Fehlt der vierte Spieler, ergänzt der Server einen Computer-Spieler mit der Schwierigkeit, die der Host beim Anlegen angibt. Es spielt höchstens ein Computer mit.
+    - Jedes Match hat einen eigenen Aufbau. Wer ein Match verlässt oder per Frist verliert, verliert auch alle folgenden Matches der Competition. Der Gegner gewinnt kampflos (`walkover`).
+    - Erscheint in einem Match keiner der beiden Spieler, endet die Competition ohne Wertung (`abgebrochen`).
+    - Der Code verfällt nach 30 Minuten ohne Start. Verlässt der Host den Warteraum, endet die Competition.
+servers:
+  - url: http://localhost:8000/api
+    description: Lokale Entwicklung
+tags:
+  - name: Auth
+    description: Registrierung, Login, Session
+  - name: Matches
+    description: Einzelne Spiele (Computer oder Duell)
+  - name: Competitions
+    description: Turniere aus mehreren Matches
+  - name: Results
+    description: Ergebnisse und Statistik
+
+security:
+  - sessionCookie: []
+
+paths:
+  /auth/register:
+    post:
+      tags: [Auth]
+      summary: Neuen Nutzer registrieren
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Credentials'
+            example:
+              name: nudl
+              passwort: geheim1234
+      responses:
+        '201':
+          description: Nutzer angelegt, Session gestartet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/Validierungsfehler'
+        '409':
+          $ref: '#/components/responses/Konflikt'
+
+  /auth/login:
+    post:
+      tags: [Auth]
+      summary: Einloggen
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Credentials'
+      responses:
+        '200':
+          description: Session gestartet (Cookie `sid`, HttpOnly)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          $ref: '#/components/responses/Validierungsfehler'
+        '401':
+          $ref: '#/components/responses/NichtAngemeldet'
+
+  /auth/logout:
+    post:
+      tags: [Auth]
+      summary: Ausloggen und Session beenden
+      responses:
+        '204':
+          description: Session beendet
+        '401':
+          $ref: '#/components/responses/NichtAngemeldet'
+
+  /auth/me:
+    get:
+      tags: [Auth]
+      summary: Angemeldeten Nutzer abrufen
+      responses:
+        '200':
+          description: Aktueller Nutzer
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '401':
+          $ref: '#/components/responses/NichtAngemeldet'
+
+  /matches:
+    post:
+      tags: [Matches]
+      summary: Neues Match anlegen
+      description: |
+        Modus `computer`: Der Server erzeugt das Labyrinth des Computers mit der gewählten Schwierigkeit. Der Aufbau beginnt sofort (Status `aufbau`).
+        Modus `duell`: Der Server vergibt einen Spielcode und setzt den Status `wartet`. Der Ersteller gibt den Code an seinen Gegner weiter. Der Code verfällt nach 10 Minuten ohne Beitritt.
+        Ein Nutzer darf höchstens ein laufendes Match haben.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MatchCreate'
+            examples:
+              computer:
+                value:
+                  modus: computer
+                  schwierigkeit: standard
+              duell:
+                value:
+                  modus: duell
+      responses:
+        '201':
+          description: Match angelegt. Im Modus `duell` enthält die Antwort den Spielcode.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Match'
+        '400':
+          $ref: '#/components/responses/Validierungsfehler'
+        '401':
+          $ref: '#/components/responses/NichtAngemeldet'
+        '409':
+          $ref: '#/components/responses/Konflikt'
+
+  /matches/join:
+    post:
+      tags: [Matches]
+      summary: Duell mit Spielcode beitreten
+      description: |
+        Setzt den Status von `wartet` auf `aufbau` und startet die Aufbauzeit.
+        Ein unbekannter oder abgelaufener Code und der Code einer Competition liefern 404.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JoinRequest'
+            example:
+              code: K7M2P
+      responses:
+        '200':
+          description: Beigetreten
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Match'
+        '400':
+          $ref: '#/components/responses/Validierungsfehler'
+        '401':
+          $ref: '#/components/responses/NichtAngemeldet'
+        '404':
+          description: Spielcode ungültig oder abgelaufen
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Fehler'
+              example:
+                fehler:
+                  code: CODE_UNGUELTIG
+                  nachricht: Der Spielcode ist ungültig oder abgelaufen.
+        '409':
+          description: Das Match läuft schon, der Nutzer ist der Ersteller oder der Nutzer hat bereits ein laufendes Match
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Fehler'
+              example:
+                fehler:
+                  code: KONFLIKT
+                  nachricht: Du kannst diesem Spiel nicht beitreten.
+
+  /matches/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Matches]
+      summary: Matchstatus abrufen (Polling)
+      description: |
+        Liefert den Stand aus Sicht des anfragenden Spielers.
+        Jeder Abruf gilt als Lebenszeichen. Der Server prüft dabei Fristen und führt fällige Aktionen aus, zum Beispiel das automatische Setzen.
+        Vom Gegner liefert die Antwort nur `gegner` (Bereitschaft) und `bekannteKarte`, nie sein Labyrinth. Nach Spielende enthält die Antwort das Labyrinth des Gegners.
+      parameters:
+        - name: since
+          in: query
+          description: Zuletzt bekannte `version`. Bei gleichem Stand antwortet der Server mit 304.
+          schema:
+            type: integer
+            minimum: 0
+      responses:
+        '200':
+          description: Aktueller Matchstatus
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Match'
+        '304':
+          description: Keine Änderung seit `since`
+        '401':
+          $ref: '#/components/responses/NichtAngemeldet'
+        '403':
+          $ref: '#/components/responses/Verboten'
+        '404':
+          $ref: '#/components/responses/NichtGefunden'
+
+  /matches/{id}/labyrinth:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    put:
+      tags: [Matches]
+      summary: Entwurf des eigenen Labyrinths speichern
+      description: |
+        Gilt im Status `aufbau`, solange der Spieler nicht gesetzt hat. Das Frontend sendet den Entwurf nach jeder Änderung.
+        Der Server prüft die Form: gültige Mauern, höchstens 30 Mauern, Schatz nicht auf A1. Liegt ein Schatz, prüft er zusätzlich, ob der Schatz von A1 aus erreichbar ist.
+        Die Antwort enthält das Ergebnis in `pruefung`. Ein unlösbarer Entwurf bleibt gespeichert. Die Antwort lautet dann 200 mit `pruefung.loesbar` gleich `false` und den markierten Mauern.
+        Bei Fristende mit unlösbarem Entwurf gilt die Nachbesserung (`ich.nachbesserungEndeAm`). Bis dahin darf der Spieler den Entwurf weiter ändern.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LabyrinthEntwurf'
+            example:
+              schatz: C4
+              mauern: [A1_A2, B2_B3]
+      responses:
+        '200':
+          description: Entwurf gespeichert
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Match'
+        '400':
+          $ref: '#/components/responses/Validierungsfehler'
+        '401':
+          $ref: '#/components/responses/NichtAngemeldet'
+        '403':
+          $ref: '#/components/responses/Verboten'
+        '404':
+          $ref: '#/components/responses/NichtGefunden'
+        '409':
+          description: Das Match ist nicht im Status `aufbau`, die Frist ist abgelaufen oder der Spieler hat schon gesetzt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Fehler'
+              example:
+                fehler:
+                  code: AUFBAU_BEENDET
+                  nachricht: Dein Labyrinth ist bereits gesetzt.
+
+  /matches/{id}/labyrinth/place:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [Matches]
+      summary: Labyrinth setzen (Button "Irrgarten setzen")
+      description: |
+        Meldet dem Server und dem Gegner, dass das Labyrinth fertig ist. Danach lassen sich Mauern und Schatz nicht mehr ändern.
+        Der Server prüft den gespeicherten Entwurf erneut. Fehlt der Schatz (`SCHATZ_FEHLT`) oder ist er nicht erreichbar (`LABYRINTH_UNLOESBAR`), antwortet er mit 422. Die Aufbauzeit läuft weiter.
+        Haben beide Spieler gesetzt, wechselt der Status auf `startbereit`. Im Modus `computer` genügt das Labyrinth des Spielers.
+      responses:
+        '200':
+          description: Labyrinth gesetzt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Match'
+        '401':
+          $ref: '#/components/responses/NichtAngemeldet'
+        '403':
+          $ref: '#/components/responses/Verboten'
+        '404':
+          $ref: '#/components/responses/NichtGefunden'
+        '409':
+          $ref: '#/components/responses/Konflikt'
+        '422':
+          description: Der Schatz fehlt oder ist von A1 aus nicht erreichbar
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Fehler'
+              example:
+                fehler:
+                  code: LABYRINTH_UNLOESBAR
+                  nachricht: Schatz nicht erreichbar.
+                  problematischeMauern: [B2_B3, C2_C3]
+
+  /matches/{id}/ready:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [Matches]
+      summary: Bereitschaft bestätigen (Overlay "Bist du bereit zu spielen?")
+      description: |
+        Gilt im Status `startbereit`. Der Spieler bestätigt damit seine Anwesenheit.
+        Bestätigen beide Spieler vor `startFristEndeAm`, wechselt der Status auf `laeuft` und der Server losst den Startspieler aus (`amZug`).
+        Im Modus `computer` genügt die Bestätigung des Spielers.
+      responses:
+        '200':
+          description: Bereitschaft bestätigt
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Match'
+        '401':
+          $ref: '#/components/responses/NichtAngemeldet'
+        '403':
+          $ref: '#/components/responses/Verboten'
+        '404':
+          $ref: '#/components/responses/NichtGefunden'
+        '409':
+          $ref: '#/components/responses/Konflikt'
+
+  /matches/{id}/queries:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [Matches]
+      summary: Anfrage stellen
+      description: |
+        Der Spieler nennt ein Zielfeld im Labyrinth des Gegners. Jedes Match startet in A1, die Position bleibt zwischen den Zügen stehen.
+        Das Ziel liegt in derselben Zeile oder Spalte wie die aktuelle Position, ein Feld oder mehrere Felder entfernt. Diagonale Ziele und die eigene Position lehnt der Server mit 400 ab.
+        Der Server beantwortet die Anfrage selbst. Der Gegner sieht Anfrage und Antwort live auf seinem Spielfeld.
+        - `ja`: Der Spieler steht auf dem Ziel und darf die nächste Anfrage stellen. Die Richtung ist frei.
+        - `nurBis`: Eine Mauer liegt auf der Strecke. Der Spieler steht vor der Mauer, der Server trägt sie in die bekannte Karte ein, und der Zug endet.
+        - `nein`: Die Mauer liegt direkt vor dem ersten Feld. Die Position bleibt gleich, die Mauer erscheint in der bekannten Karte, und der Zug endet.
+        - `schatzGefunden`: Der Schatz liegt auf der Strecke. Das Match endet, der Spieler gewinnt.
+        Jede Anfrage zählt für das Ergebnis. Im Modus `computer` enthält die Antwort die Anfragen des Computers in seinem Zug.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueryRequest'
+            example:
+              anfrageNr: 1
+              ziel: A4
+      responses:
+        '200':
+          description: Anfrage beantwortet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryResponse'
+        '400':
+          description: Ungültige Anfrage, zum Beispiel ein diagonales Ziel oder die eigene Position
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Fehler'
+              example:
+                fehler:
+                  code: ZIEL_NICHT_GERADE
+                  nachricht: Das Ziel muss in derselben Zeile oder Spalte liegen.
+        '401':
+          $ref: '#/components/responses/NichtAngemeldet'
+        '403':
+          $ref: '#/components/responses/Verboten'
+        '404':
+          $ref: '#/components/responses/NichtGefunden'
+        '409':
+          description: Spieler ist nicht am Zug, `anfrageNr` ist veraltet oder das Match läuft nicht
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Fehler'
+              example:
+                fehler:
+                  code: NICHT_AM_ZUG
+                  nachricht: Der Gegner ist am Zug.
+
+  /matches/{id}/resign:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [Matches]
+      summary: Aufgeben
+      description: |
+        Beendet das Match. Der Aufgebende verliert. Im Status `wartet` bricht der Aufruf das Match ab, ohne Ergebnis.
+        In einer Competition verliert der Aufgebende auch alle folgenden Matches.
+      responses:
+        '200':
+          description: Match beendet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Match'
+        '401':
+          $ref: '#/components/responses/NichtAngemeldet'
+        '403':
+          $ref: '#/components/responses/Verboten'
+        '404':
+          $ref: '#/components/responses/NichtGefunden'
+        '409':
+          $ref: '#/components/responses/Konflikt'
+
+  /competitions:
+    post:
+      tags: [Competitions]
+      summary: Competition anlegen
+      description: |
+        Der Ersteller wird Host und nimmt automatisch teil. Der Server vergibt einen Spielcode, der nach 30 Minuten ohne Start verfällt.
+        Die Competition startet nicht von selbst. Der Host startet sie mit `POST /competitions/{id}/start`.
+        `schwierigkeit` bestimmt die Labyrinthe des Computer-Spielers. Das Frontend übernimmt den Wert aus dem Dashboard.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompetitionCreate'
+            example:
+              groesse: 4
+              schwierigkeit: standard
+      responses:
+        '201':
+          description: Competition angelegt. Die Antwort enthält den Spielcode.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Competition'
+        '400':
+          $ref: '#/components/responses/Validierungsfehler'
+        '401':
+          $ref: '#/components/responses/NichtAngemeldet'
+        '409':
+          $ref: '#/components/responses/Konflikt'
+
+  /competitions/join:
+    post:
+      tags: [Competitions]
+      summary: Competition mit Spielcode beitreten
+      description: Ein unbekannter oder abgelaufener Code und der Code eines Duells liefern 404.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JoinRequest'
+            example:
+              code: H3R8W
+      responses:
+        '200':
+          description: Beigetreten
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Competition'
+        '400':
+          $ref: '#/components/responses/Validierungsfehler'
+        '401':
+          $ref: '#/components/responses/NichtAngemeldet'
+        '404':
+          description: Spielcode ungültig oder abgelaufen
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Fehler'
+              example:
+                fehler:
+                  code: CODE_UNGUELTIG
+                  nachricht: Der Spielcode ist ungültig oder abgelaufen.
+        '409':
+          description: Die Competition ist voll oder läuft bereits, oder der Nutzer nimmt schon teil
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Fehler'
+              example:
+                fehler:
+                  code: COMPETITION_VOLL
+                  nachricht: Die Competition hat keinen freien Platz mehr.
+
+  /competitions/{id}:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    get:
+      tags: [Competitions]
+      summary: Competition abrufen (Polling)
+      description: Liefert den Warteraum (Teilnehmer, Status), die Runden mit Paarungen, die Platzierungen und das nächste Match des Nutzers.
+      responses:
+        '200':
+          description: Aktueller Stand
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Competition'
+        '401':
+          $ref: '#/components/responses/NichtAngemeldet'
+        '403':
+          $ref: '#/components/responses/Verboten'
+        '404':
+          $ref: '#/components/responses/NichtGefunden'
+
+  /competitions/{id}/start:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    post:
+      tags: [Competitions]
+      summary: Competition starten (nur Host)
+      description: |
+        Gilt im Status `wartet` ab 3 Teilnehmern. Fehlt der vierte Spieler, ergänzt der Server einen Computer-Spieler.
+        Der Server losst die Paarungen für Runde 1 aus, setzt den Computer in ein Match gegen einen Menschen und legt die Matches an. Der Code wird ungültig.
+        Runde 2 legt der Server an, sobald beide Matches der Runde 1 beendet sind.
+      responses:
+        '200':
+          description: Competition gestartet
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Competition'
+        '401':
+          $ref: '#/components/responses/NichtAngemeldet'
+        '403':
+          $ref: '#/components/responses/Verboten'
+        '404':
+          $ref: '#/components/responses/NichtGefunden'
+        '409':
+          description: Weniger als 3 Teilnehmer oder die Competition ist nicht im Status `wartet`
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Fehler'
+              example:
+                fehler:
+                  code: ZU_WENIG_SPIELER
+                  nachricht: Für den Start brauchst du mindestens 3 Spieler.
+
+  /competitions/{id}/participants/me:
+    parameters:
+      - $ref: '#/components/parameters/Id'
+    delete:
+      tags: [Competitions]
+      summary: Warteraum vor dem Start verlassen
+      description: |
+        Der Server entfernt den Teilnehmer aus der Liste.
+        Verlässt der Host den Warteraum, endet die Competition (Status `abgebrochen`) und der Code wird ungültig.
+        Nach dem Start gibt der Spieler über `POST /matches/{id}/resign` auf.
+      responses:
+        '204':
+          description: Verlassen
+        '401':
+          $ref: '#/components/responses/NichtAngemeldet'
+        '404':
+          $ref: '#/components/responses/NichtGefunden'
+        '409':
+          $ref: '#/components/responses/Konflikt'
+
+  /results:
+    get:
+      tags: [Results]
+      summary: Ergebnisse des angemeldeten Nutzers
+      description: |
+        Jedes beendete Match mit Wertung erzeugt einen Eintrag, auch innerhalb einer Competition. Der Server legt die Einträge selbst an. Der Client trägt keine Ergebnisse ein.
+        Matches ohne Wertung (`abgebrochen`) und der Computer-Spieler haben keinen Eintrag.
+      parameters:
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 10
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            minimum: 0
+            default: 0
+      responses:
+        '200':
+          description: Ergebnisse, neueste zuerst
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Result'
+        '401':
+          $ref: '#/components/responses/NichtAngemeldet'
+
+  /results/stats:
+    get:
+      tags: [Results]
+      summary: Siege, Niederlagen und Quote des angemeldeten Nutzers
+      description: Der Server berechnet die Werte. Das Frontend zeigt sie nur an.
+      responses:
+        '200':
+          description: Statistik
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Statistik'
+        '401':
+          $ref: '#/components/responses/NichtAngemeldet'
+
+components:
+  securitySchemes:
+    sessionCookie:
+      type: apiKey
+      in: cookie
+      name: sid
+      description: HttpOnly-Cookie, das der Server bei Login oder Registrierung setzt.
+
+  parameters:
+    Id:
+      name: id
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+
+  responses:
+    Validierungsfehler:
+      description: Ungültige Eingabe
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Fehler'
+          example:
+            fehler:
+              code: VALIDIERUNG
+              nachricht: Eingabe ungültig.
+              details:
+                - feld: name
+                  problem: Mindestens 3 Zeichen erforderlich.
+    NichtAngemeldet:
+      description: Keine gültige Session
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Fehler'
+          example:
+            fehler:
+              code: NICHT_ANGEMELDET
+              nachricht: Bitte melde dich an.
+    Verboten:
+      description: Der Nutzer darf die Aktion nicht ausführen. Er nimmt nicht teil oder er ist nicht der Host.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Fehler'
+          example:
+            fehler:
+              code: VERBOTEN
+              nachricht: Dafür fehlt dir die Berechtigung.
+    NichtGefunden:
+      description: Ressource existiert nicht
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Fehler'
+          example:
+            fehler:
+              code: NICHT_GEFUNDEN
+              nachricht: Ressource nicht gefunden.
+    Konflikt:
+      description: Aktion passt nicht zum aktuellen Zustand
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Fehler'
+          example:
+            fehler:
+              code: KONFLIKT
+              nachricht: Der Name ist bereits vergeben.
+
+  schemas:
+    Fehler:
+      type: object
+      required: [fehler]
+      properties:
+        fehler:
+          type: object
+          required: [code, nachricht]
+          properties:
+            code:
+              type: string
+              description: Maschinenlesbarer Code
+              example: NICHT_AM_ZUG
+            nachricht:
+              type: string
+              description: Lesbare Erklärung
+            details:
+              type: array
+              items:
+                type: object
+                properties:
+                  feld:
+                    type: string
+                  problem:
+                    type: string
+            problematischeMauern:
+              type: array
+              description: Nur bei `LABYRINTH_UNLOESBAR`. Mauern am Rand des von A1 erreichbaren Bereichs.
+              items:
+                $ref: '#/components/schemas/Mauer'
+
+    Credentials:
+      type: object
+      required: [name, passwort]
+      properties:
+        name:
+          type: string
+          minLength: 3
+          maxLength: 20
+        passwort:
+          type: string
+          minLength: 8
+          maxLength: 100
+
+    User:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+
+    Zelle:
+      type: string
+      pattern: '^[A-F][1-6]$'
+      description: Zelle als Zeilenbuchstabe und Spaltenzahl
+      example: C4
+
+    Mauer:
+      type: string
+      pattern: '^[A-F][1-6]_[A-F][1-6]$'
+      description: Mauer zwischen zwei benachbarten Zellen
+      example: A1_A2
+
+    Code:
+      type: string
+      pattern: '^[A-HJ-NP-Z2-9]{5}$'
+      description: Spielcode aus fünf Zeichen, ohne `0`, `O`, `1` und `I`
+      example: K7M2P
+
+    JoinRequest:
+      type: object
+      required: [code]
+      properties:
+        code:
+          $ref: '#/components/schemas/Code'
+
+    Labyrinth:
+      type: object
+      required: [schatz, mauern]
+      properties:
+        schatz:
+          $ref: '#/components/schemas/Zelle'
+        mauern:
+          type: array
+          items:
+            $ref: '#/components/schemas/Mauer'
+
+    LabyrinthEntwurf:
+      type: object
+      description: Entwurf eines Spielers im Aufbau. Der Schatz darf noch fehlen.
+      required: [mauern]
+      properties:
+        schatz:
+          allOf:
+            - $ref: '#/components/schemas/Zelle'
+          nullable: true
+          description: Darf nicht A1 sein
+        mauern:
+          type: array
+          maxItems: 30
+          items:
+            $ref: '#/components/schemas/Mauer'
+
+    Pruefung:
+      type: object
+      description: Ergebnis der Lösbarkeitsprüfung für den eigenen Entwurf
+      required: [loesbar]
+      properties:
+        loesbar:
+          type: boolean
+          nullable: true
+          description: '`true` wenn der Schatz von A1 aus erreichbar ist, `false` wenn nicht, `null` solange kein Schatz liegt'
+        meldung:
+          type: string
+          nullable: true
+          example: Schatz nicht erreichbar
+        problematischeMauern:
+          type: array
+          description: Mauern am Rand des von A1 erreichbaren Bereichs. Leer, wenn `loesbar` nicht `false` ist.
+          items:
+            $ref: '#/components/schemas/Mauer'
+
+    Schwierigkeit:
+      type: string
+      enum: [einfach, standard, schwer]
+      default: standard
+      description: Wirkt nur auf Labyrinthe des Computers. Das Dashboard zeigt `einfach` als "Einfach", `standard` als "Standard" und `schwer` als "Schwer". "Standard" ist vorausgewählt.
+
+    MatchCreate:
+      type: object
+      required: [modus]
+      properties:
+        modus:
+          type: string
+          enum: [computer, duell]
+        schwierigkeit:
+          $ref: '#/components/schemas/Schwierigkeit'
+      description: '`schwierigkeit` ist im Modus `computer` Pflicht und im Modus `duell` verboten.'
+
+    MatchStatus:
+      type: string
+      enum: [wartet, aufbau, startbereit, laeuft, beendet, abgebrochen]
+      description: |
+        `wartet`: Das Duell wartet auf den Gegner.
+        `aufbau`: Die Spieler bauen ihr Labyrinth.
+        `startbereit`: Die Labyrinthe stehen, das Overlay fragt nach der Anwesenheit.
+        `laeuft`: Die Anfragen laufen.
+        `beendet`: Das Match hat ein Ergebnis.
+        `abgebrochen`: Das Match endete ohne Ergebnis.
+
+    Spieler:
+      type: object
+      required: [id, name]
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        istComputer:
+          type: boolean
+          default: false
+
+    Bereitschaft:
+      type: object
+      description: Fortschritt eines Spielers in Aufbau und Start. Enthält nie das Labyrinth.
+      required: [labyrinthGesetzt, startBestaetigt]
+      properties:
+        labyrinthGesetzt:
+          type: boolean
+        startBestaetigt:
+          type: boolean
+        nachbesserungEndeAm:
+          type: string
+          format: date-time
+          nullable: true
+          description: Ende der Nachbesserungsminute. Beim Gegner zeigt der Wert, dass der Spieler überarbeitet.
+
+    BekannteKarte:
+      type: object
+      description: Was der Spieler über das Labyrinth des Gegners weiß. Zu Beginn enthält `besuchteZellen` nur A1.
+      required: [position, besuchteZellen, entdeckteMauern]
+      properties:
+        position:
+          $ref: '#/components/schemas/Zelle'
+        # Start immer A1, die Position ist nie leer
+        besuchteZellen:
+          type: array
+          items:
+            $ref: '#/components/schemas/Zelle'
+        entdeckteMauern:
+          type: array
+          items:
+            $ref: '#/components/schemas/Mauer'
+
+    Match:
+      type: object
+      required: [id, version, serverZeit, modus, status, spieler, anfrageNr]
+      properties:
+        id:
+          type: string
+          format: uuid
+        version:
+          type: integer
+          description: Zähler, der bei jeder Änderung steigt
+        serverZeit:
+          type: string
+          format: date-time
+          description: Uhrzeit des Servers zum Zeitpunkt der Antwort. Basis für alle Restzeiten.
+        modus:
+          type: string
+          enum: [computer, duell]
+        schwierigkeit:
+          allOf:
+            - $ref: '#/components/schemas/Schwierigkeit'
+          nullable: true
+        status:
+          $ref: '#/components/schemas/MatchStatus'
+        code:
+          allOf:
+            - $ref: '#/components/schemas/Code'
+          nullable: true
+          description: Spielcode. Nur der Ersteller sieht ihn und nur im Status `wartet`.
+        competitionId:
+          type: string
+          format: uuid
+          nullable: true
+        spieler:
+          type: array
+          items:
+            $ref: '#/components/schemas/Spieler'
+        amZug:
+          type: string
+          nullable: true
+          description: Id des Spielers, der Anfragen stellen darf
+        anfrageNr:
+          type: integer
+          description: Nummer der nächsten erwarteten Anfrage, beginnt bei 1
+        aufbauEndeAm:
+          type: string
+          format: date-time
+          nullable: true
+          description: Ende der Aufbauzeit. Nur im Status `aufbau` gesetzt.
+        startFristEndeAm:
+          type: string
+          format: date-time
+          nullable: true
+          description: Ende der Frist für die Bereitschaft. Nur im Status `startbereit` gesetzt.
+        ich:
+          $ref: '#/components/schemas/Bereitschaft'
+        gegner:
+          allOf:
+            - $ref: '#/components/schemas/Bereitschaft'
+          nullable: true
+          description: Fehlt im Status `wartet`
+        pruefung:
+          allOf:
+            - $ref: '#/components/schemas/Pruefung'
+          nullable: true
+          description: Lösbarkeit des eigenen Entwurfs. Nur im Status `aufbau` gesetzt.
+        meinLabyrinth:
+          allOf:
+            - $ref: '#/components/schemas/LabyrinthEntwurf'
+          nullable: true
+        bekannteKarte:
+          $ref: '#/components/schemas/BekannteKarte'
+        siegerId:
+          type: string
+          nullable: true
+        endegrund:
+          type: string
+          nullable: true
+          enum: [schatz, aufgabe, abwesenheit, zugfrist, startfrist, walkover]
+        gegnerLabyrinth:
+          allOf:
+            - $ref: '#/components/schemas/Labyrinth'
+          nullable: true
+          description: Nur im Status `beendet` gefüllt
+
+    QueryRequest:
+      type: object
+      required: [anfrageNr, ziel]
+      properties:
+        anfrageNr:
+          type: integer
+          minimum: 1
+          description: Nummer der Anfrage laut `Match.anfrageNr`. Schützt vor Doppelklick und Retry.
+        ziel:
+          allOf:
+            - $ref: '#/components/schemas/Zelle'
+          description: Zielfeld in derselben Zeile oder Spalte wie die aktuelle Position
+
+    AnfrageErgebnis:
+      type: object
+      required: [ziel, ergebnis, position]
+      properties:
+        ziel:
+          $ref: '#/components/schemas/Zelle'
+        ergebnis:
+          type: string
+          enum: [ja, nurBis, nein, schatzGefunden]
+        position:
+          allOf:
+            - $ref: '#/components/schemas/Zelle'
+          description: Position nach der Anfrage
+        mauer:
+          allOf:
+            - $ref: '#/components/schemas/Mauer'
+          nullable: true
+          description: Entdeckte Mauer. Nur bei `nurBis` und `nein` gesetzt.
+
+    QueryResponse:
+      type: object
+      required: [ergebnis, position, match]
+      properties:
+        ergebnis:
+          type: string
+          enum: [ja, nurBis, nein, schatzGefunden]
+        position:
+          allOf:
+            - $ref: '#/components/schemas/Zelle'
+          description: Position nach der Anfrage
+        mauer:
+          allOf:
+            - $ref: '#/components/schemas/Mauer'
+          nullable: true
+          description: Entdeckte Mauer. Nur bei `nurBis` und `nein` gesetzt.
+        computerAnfragen:
+          type: array
+          nullable: true
+          description: Nur im Modus `computer`. Die Anfragen des Computers in seinem Zug, in der Reihenfolge ihrer Ausführung.
+          items:
+            $ref: '#/components/schemas/AnfrageErgebnis'
+        match:
+          $ref: '#/components/schemas/Match'
+
+    CompetitionCreate:
+      type: object
+      required: [groesse, schwierigkeit]
+      properties:
+        groesse:
+          type: integer
+          enum: [4]
+          description: Heute nur 4 Spieler. Ein Turnier mit 8 Spielern ist eine spätere Erweiterung.
+        schwierigkeit:
+          $ref: '#/components/schemas/Schwierigkeit'
+
+    BracketMatch:
+      type: object
+      required: [matchId, spielerA, spielerB, status]
+      properties:
+        matchId:
+          type: string
+          format: uuid
+        spielerA:
+          $ref: '#/components/schemas/Spieler'
+        spielerB:
+          $ref: '#/components/schemas/Spieler'
+        status:
+          $ref: '#/components/schemas/MatchStatus'
+        siegerId:
+          type: string
+          nullable: true
+        platzUm:
+          type: array
+          nullable: true
+          description: Platzierungen, um die das Match geht. In Runde 1 leer, in Runde 2 `[1, 2]` oder `[3, 4]`.
+          items:
+            type: integer
+          example: [1, 2]
+
+    Runde:
+      type: object
+      required: [nr, matches]
+      properties:
+        nr:
+          type: integer
+          minimum: 1
+          maximum: 2
+        matches:
+          type: array
+          items:
+            $ref: '#/components/schemas/BracketMatch'
+
+    Platzierung:
+      type: object
+      required: [platz, spieler]
+      properties:
+        platz:
+          type: integer
+          minimum: 1
+          maximum: 4
+        spieler:
+          $ref: '#/components/schemas/Spieler'
+
+    Competition:
+      type: object
+      required: [id, groesse, status, hostId, teilnehmer, runden]
+      properties:
+        id:
+          type: string
+          format: uuid
+        groesse:
+          type: integer
+          enum: [4]
+        schwierigkeit:
+          $ref: '#/components/schemas/Schwierigkeit'
+        status:
+          type: string
+          enum: [wartet, laeuft, beendet, abgebrochen]
+          description: |
+            `wartet`: Warteraum, der Host startet ab 3 Teilnehmern.
+            `laeuft`: Die Runden laufen.
+            `beendet`: Die Platzierung steht fest.
+            `abgebrochen`: Die Competition endete ohne Wertung, weil der Host den Warteraum verließ oder in einem Match kein Spieler erschien.
+        hostId:
+          type: string
+          format: uuid
+        code:
+          allOf:
+            - $ref: '#/components/schemas/Code'
+          nullable: true
+          description: Spielcode. Nur der Host sieht ihn und nur im Status `wartet`.
+        teilnehmer:
+          type: array
+          description: Im Warteraum die beigetretenen Spieler, nach dem Start inklusive Computer-Spieler
+          items:
+            $ref: '#/components/schemas/Spieler'
+        runden:
+          type: array
+          items:
+            $ref: '#/components/schemas/Runde'
+        platzierungen:
+          type: array
+          description: Wächst mit jeder beendeten Runde
+          items:
+            $ref: '#/components/schemas/Platzierung'
+        meinNaechstesMatchId:
+          type: string
+          format: uuid
+          nullable: true
+
+    Result:
+      type: object
+      required: [id, matchId, modus, ausgang, anfragen, beendetAm]
+      properties:
+        id:
+          type: string
+          format: uuid
+        matchId:
+          type: string
+          format: uuid
+        competitionId:
+          type: string
+          format: uuid
+          nullable: true
+        runde:
+          type: integer
+          nullable: true
+          description: Runde der Competition, sonst `null`
+        platzierung:
+          type: integer
+          nullable: true
+          description: Endplatzierung des Nutzers in der Competition. `null` außerhalb von Competitions und bis die Competition endet.
+        modus:
+          type: string
+          enum: [computer, duell]
+        schwierigkeit:
+          allOf:
+            - $ref: '#/components/schemas/Schwierigkeit'
+          nullable: true
+          description: Nur bei Matches gegen den Computer gesetzt
+        gegner:
+          type: string
+          description: Name des Gegners. Bei `computer` der Text `Computer`.
+        ausgang:
+          type: string
+          enum: [sieg, niederlage]
+        endegrund:
+          type: string
+          enum: [schatz, aufgabe, abwesenheit, zugfrist, startfrist, walkover]
+        anfragen:
+          type: integer
+          description: Benötigte Anfragen des Nutzers
+        minAnfragen:
+          type: integer
+          description: Kleinste Zahl an Anfragen, mit der der Schatz im Labyrinth des Gegners von A1 aus erreichbar ist. Das entspricht den Geradenstücken des besten Wegs (BFS).
+        effizienz:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          description: '`minAnfragen / anfragen`'
+        beendetAm:
+          type: string
+          format: date-time
+
+    Statistik:
+      type: object
+      required: [siege, niederlagen, quote]
+      properties:
+        siege:
+          type: integer
+          minimum: 0
+        niederlagen:
+          type: integer
+          minimum: 0
+        quote:
+          type: number
+          format: float
+          minimum: 0
+          maximum: 1
+          description: '`siege / (siege + niederlagen)`, bei 0 Spielen der Wert 0'
