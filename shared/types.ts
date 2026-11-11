@@ -24,7 +24,29 @@ export type LabyrinthEntwurf = {
 
 export type MatchStatus = 'wartet' | 'aufbau' | 'startbereit' | 'laeuft' | 'beendet' | 'abgebrochen'
 
-/* export type Fehler = {
-    
+/** Maschinenlesbare Fehlercodes aus der openapi.yaml */
+export type FehlerCode =
+  | 'VALIDIERUNG'
+  | 'NICHT_ANGEMELDET'
+  | 'VERBOTEN'
+  | 'NICHT_GEFUNDEN'
+  | 'KONFLIKT'
+  | 'CODE_UNGUELTIG'
+  | 'AUFBAU_BEENDET'
+  | 'SCHATZ_FEHLT'
+  | 'LABYRINTH_UNLOESBAR'
+  | 'NICHT_AM_ZUG'
+  | 'ZIEL_NICHT_GERADE'
+  | 'COMPETITION_VOLL'
+  | 'ZU_WENIG_SPIELER'
+  | 'INTERN'
+
+/** Antwort des Servers bei jedem Fehler */
+export type Fehler = {
+  fehler: {
+    code: FehlerCode
+    nachricht: string
+    details?: { feld: string; problem: string }[]
+    problematischeMauern?: Mauer[]
+  }
 }
-*/

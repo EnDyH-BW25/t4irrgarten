@@ -12,4 +12,6 @@ Deno.test('GET /api/health liefert Status ok', async () => {
 Deno.test('unbekannte Route liefert 404', async () => {
   const res = await app.request('/api/gibtsnicht')
   assertEquals(res.status, 404)
+  const data = await res.json()
+  assertEquals(data.fehler.code, 'NICHT_GEFUNDEN')
 })
