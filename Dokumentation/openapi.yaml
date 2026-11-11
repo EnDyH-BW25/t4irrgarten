@@ -700,6 +700,16 @@ components:
             fehler:
               code: KONFLIKT
               nachricht: Der Name ist bereits vergeben.
+    Serverfehler:
+      description: Unerwarteter Fehler im Server. Die Antwort enthält keine internen Details.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Fehler'
+          example:
+            fehler:
+              code: INTERN
+              nachricht: Interner Serverfehler.
 
   schemas:
     Fehler:
@@ -712,7 +722,7 @@ components:
           properties:
             code:
               type: string
-              description: Maschinenlesbarer Code
+              description: Maschinenlesbarer Code. `INTERN` steht für einen unerwarteten Fehler mit Status 500.
               example: NICHT_AM_ZUG
             nachricht:
               type: string
