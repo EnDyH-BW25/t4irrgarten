@@ -1,11 +1,17 @@
-<script setup lang="ts"></script>
+<script setup lang="ts">
+import { RouterLink, RouterView } from 'vue-router'
+</script>
 
 <template>
-  <h1>You did it!</h1>
-  <p>
-    Visit <a href="https://vuejs.org/" target="_blank" rel="noopener">vuejs.org</a> to read the
-    documentation
-  </p>
+  <div class="min-h-screen bg-slate-100 font-text text-slate-900">
+    <header class="bg-blue-700 text-white">
+      <nav class="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
+        <RouterLink to="/" class="font-titel text-xl">Irrgarten</RouterLink>
+        <RouterLink to="/dashboard" class="hover:underline">Dashboard</RouterLink>
+      </nav>
+    </header>
+    <main class="mx-auto max-w-5xl px-4 py-6">
+      <RouterView />
+    </main>
+  </div>
 </template>
-
-<style scoped></style>
