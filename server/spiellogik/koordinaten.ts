@@ -32,3 +32,11 @@ export function zuZelle(zeile: number, spalte: number): Zelle | null {
   if (!imRaster(zeile) || !imRaster(spalte)) return null
   return `${ZEILEN[zeile]}${(spalte + 1) as Spalte}`
 }
+
+/** Prüft, ob zwei Zellen waagrecht oder senkrecht nebeneinander liegen */
+export function sindNachbarn(a: Zelle, b: Zelle): boolean {
+  const pa = zuPosition(a)
+  const pb = zuPosition(b)
+  const abstand = Math.abs(pa.zeile - pb.zeile) + Math.abs(pa.spalte - pb.spalte)
+  return abstand === 1
+}

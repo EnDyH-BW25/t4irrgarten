@@ -1,6 +1,6 @@
 import { assert, assertEquals, assertFalse } from '@std/assert'
 import type { Zelle } from '../../shared/types.ts'
-import { istZelle, zuPosition, zuZelle } from './koordinaten.ts'
+import { istZelle, sindNachbarn, zuPosition, zuZelle } from './koordinaten.ts'
 
 Deno.test('istZelle erkennt gültige Zellen', () => {
   for (const text of ['A1', 'C4', 'F6']) assert(istZelle(text), text)
@@ -32,4 +32,15 @@ Deno.test('zuZelle kehrt zuPosition für alle 36 Zellen um', () => {
       assertEquals(zuZelle(zeile, spalte), zelle)
     }
   }
+})
+
+Deno.test('sindNachbarn erkennt waagrechte und senkrechte Nachbarn', () => {
+  assert(sindNachbarn('A1', 'A2'))
+  assert(sindNachbarn('A1', 'B1'))
+  assert(sindNachbarn('C4', 'B4'))
+})
+
+Deno.test('sindNachbarn lehnt diagonale, entfernte und gleiche Zellen ab', () => {
+  const paare: [Zelle, Zelle][] = [['A1', 'B2'], ['A1', 'A3'], ['A1', 'F6'], ['A1', 'A1']]
+  for (const [a, b] of paare) assertFalse(sindNachbarn(a, b), `${a}/${b}`)
 })
