@@ -47,8 +47,18 @@ export function parseMauer(text: string): Mauer | null {
   if (teile.length !== 2) return null
   const [a, b] = teile
   if (!istZelle(a) || !istZelle(b) || !sindNachbarn(a, b)) return null
+  return mauerZwischen(a, b)
+}
+
+/** Baut die Mauer zwischen zwei Nachbarzellen, egal in welcher Reihenfolge sie kommen */
+export function mauerZwischen(a: Zelle, b: Zelle): Mauer {
   // Kleinere Zelle zuerst, damit jede Mauer nur eine Schreibweise hat
   return a < b ? `${a}_${b}` : `${b}_${a}`
+}
+
+/** Zerlegt eine Mauer in ihre beiden Zellen */
+export function zellenDerMauer(mauer: Mauer): [Zelle, Zelle] {
+  return mauer.split('_') as [Zelle, Zelle]
 }
 
 // Ein Schritt in Zeile und Spalte: oben, rechts, unten, links

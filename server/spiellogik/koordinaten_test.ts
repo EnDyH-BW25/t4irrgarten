@@ -1,6 +1,15 @@
 import { assert, assertEquals, assertFalse } from '@std/assert'
 import type { Zelle } from '../../shared/types.ts'
-import { istZelle, nachbarn, parseMauer, sindNachbarn, zuPosition, zuZelle } from './koordinaten.ts'
+import {
+  istZelle,
+  mauerZwischen,
+  nachbarn,
+  parseMauer,
+  sindNachbarn,
+  zellenDerMauer,
+  zuPosition,
+  zuZelle,
+} from './koordinaten.ts'
 
 Deno.test('istZelle erkennt gültige Zellen', () => {
   for (const text of ['A1', 'C4', 'F6']) assert(istZelle(text), text)
@@ -84,4 +93,15 @@ Deno.test('nachbarn passt für alle 36 Zellen zu sindNachbarn', () => {
   }
   // 4 Ecken x 2 + 16 Randzellen x 3 + 16 innere Zellen x 4
   assertEquals(anzahl, 120)
+})
+
+Deno.test('mauerZwischen liefert die einheitliche Schreibweise', () => {
+  assertEquals(mauerZwischen('A1', 'A2'), 'A1_A2')
+  assertEquals(mauerZwischen('A2', 'A1'), 'A1_A2')
+  assertEquals(mauerZwischen('D4', 'C4'), 'C4_D4')
+})
+
+Deno.test('zellenDerMauer zerlegt eine Mauer in ihre Zellen', () => {
+  assertEquals(zellenDerMauer('A1_A2'), ['A1', 'A2'])
+  assertEquals(zellenDerMauer('C4_D4'), ['C4', 'D4'])
 })
