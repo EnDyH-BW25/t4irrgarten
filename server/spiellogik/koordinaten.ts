@@ -1,4 +1,4 @@
-import type { Spalte, Zeile, Zelle } from '../../shared/types.ts'
+import type { Mauer, Spalte, Zeile, Zelle } from '../../shared/types.ts'
 
 // Ein Buchstabe A-F, danach eine Ziffer 1-6, sonst nichts
 const ZELLE_MUSTER = /^[A-F][1-6]$/
@@ -39,4 +39,14 @@ export function sindNachbarn(a: Zelle, b: Zelle): boolean {
   const pb = zuPosition(b)
   const abstand = Math.abs(pa.zeile - pb.zeile) + Math.abs(pa.spalte - pb.spalte)
   return abstand === 1
+}
+
+/** Liest eine Mauer wie "A2_A1" und gibt sie vereinheitlicht zurück ("A1_A2"), sonst null */
+export function parseMauer(text: string): Mauer | null {
+  const teile = text.split('_')
+  if (teile.length !== 2) return null
+  const [a, b] = teile
+  if (!istZelle(a) || !istZelle(b) || !sindNachbarn(a, b)) return null
+  // Kleinere Zelle zuerst, damit jede Mauer nur eine Schreibweise hat
+  return a < b ? `${a}_${b}` : `${b}_${a}`
 }

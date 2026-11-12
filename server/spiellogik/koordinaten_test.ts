@@ -1,6 +1,6 @@
 import { assert, assertEquals, assertFalse } from '@std/assert'
 import type { Zelle } from '../../shared/types.ts'
-import { istZelle, sindNachbarn, zuPosition, zuZelle } from './koordinaten.ts'
+import { istZelle, parseMauer, sindNachbarn, zuPosition, zuZelle } from './koordinaten.ts'
 
 Deno.test('istZelle erkennt gültige Zellen', () => {
   for (const text of ['A1', 'C4', 'F6']) assert(istZelle(text), text)
@@ -43,4 +43,20 @@ Deno.test('sindNachbarn erkennt waagrechte und senkrechte Nachbarn', () => {
 Deno.test('sindNachbarn lehnt diagonale, entfernte und gleiche Zellen ab', () => {
   const paare: [Zelle, Zelle][] = [['A1', 'B2'], ['A1', 'A3'], ['A1', 'F6'], ['A1', 'A1']]
   for (const [a, b] of paare) assertFalse(sindNachbarn(a, b), `${a}/${b}`)
+})
+
+Deno.test('parseMauer akzeptiert gültige Mauern', () => {
+  assertEquals(parseMauer('A1_A2'), 'A1_A2')
+  assertEquals(parseMauer('C4_D4'), 'C4_D4')
+})
+
+Deno.test('parseMauer vereinheitlicht die Reihenfolge', () => {
+  assertEquals(parseMauer('A2_A1'), 'A1_A2')
+  assertEquals(parseMauer('D4_C4'), 'C4_D4')
+})
+
+Deno.test('parseMauer lehnt ungültige Texte ab', () => {
+  for (const text of ['A1_F6', 'A1_B2', 'A1_A1', 'G1_G2', 'A1-A2', 'A1_', 'A1A2', 'A1_A2_A3', '']) {
+    assertEquals(parseMauer(text), null, text)
+  }
 })
