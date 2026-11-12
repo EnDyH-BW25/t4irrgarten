@@ -50,3 +50,17 @@ export function parseMauer(text: string): Mauer | null {
   // Kleinere Zelle zuerst, damit jede Mauer nur eine Schreibweise hat
   return a < b ? `${a}_${b}` : `${b}_${a}`
 }
+
+// Ein Schritt in Zeile und Spalte: oben, rechts, unten, links
+const RICHTUNGEN = [[-1, 0], [0, 1], [1, 0], [0, -1]] as const
+
+/** Liefert alle Zellen, die waagrecht oder senkrecht an eine Zelle grenzen */
+export function nachbarn(zelle: Zelle): Zelle[] {
+  const { zeile, spalte } = zuPosition(zelle)
+  const ergebnis: Zelle[] = []
+  for (const [dz, ds] of RICHTUNGEN) {
+    const nachbar = zuZelle(zeile + dz, spalte + ds)
+    if (nachbar) ergebnis.push(nachbar)
+  }
+  return ergebnis
+}

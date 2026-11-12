@@ -1,6 +1,6 @@
 import { assert, assertEquals, assertFalse } from '@std/assert'
 import type { Zelle } from '../../shared/types.ts'
-import { istZelle, parseMauer, sindNachbarn, zuPosition, zuZelle } from './koordinaten.ts'
+import { istZelle, nachbarn, parseMauer, sindNachbarn, zuPosition, zuZelle } from './koordinaten.ts'
 
 Deno.test('istZelle erkennt gültige Zellen', () => {
   for (const text of ['A1', 'C4', 'F6']) assert(istZelle(text), text)
@@ -59,4 +59,29 @@ Deno.test('parseMauer lehnt ungültige Texte ab', () => {
   for (const text of ['A1_F6', 'A1_B2', 'A1_A1', 'G1_G2', 'A1-A2', 'A1_', 'A1A2', 'A1_A2_A3', '']) {
     assertEquals(parseMauer(text), null, text)
   }
+})
+
+Deno.test('nachbarn liefert vier Nachbarn in der Mitte', () => {
+  assertEquals(nachbarn('C4'), ['B4', 'C5', 'D4', 'C3'])
+})
+
+Deno.test('nachbarn lässt Zellen außerhalb des Rasters weg', () => {
+  assertEquals(nachbarn('A1'), ['A2', 'B1'])
+  assertEquals(nachbarn('F6'), ['E6', 'F5'])
+  assertEquals(nachbarn('A3'), ['A4', 'B3', 'A2'])
+})
+
+Deno.test('nachbarn passt für alle 36 Zellen zu sindNachbarn', () => {
+  let anzahl = 0
+  for (const z of ['A', 'B', 'C', 'D', 'E', 'F']) {
+    for (let s = 1; s <= 6; s++) {
+      const zelle = `${z}${s}` as Zelle
+      for (const nachbar of nachbarn(zelle)) {
+        assert(sindNachbarn(zelle, nachbar), `${zelle}/${nachbar}`)
+        anzahl++
+      }
+    }
+  }
+  // 4 Ecken x 2 + 16 Randzellen x 3 + 16 innere Zellen x 4
+  assertEquals(anzahl, 120)
 })
