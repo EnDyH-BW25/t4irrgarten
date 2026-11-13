@@ -1,5 +1,5 @@
 import type { Mauer, Zelle } from '../../shared/types.ts'
-import { mauerZwischen, nachbarn } from './koordinaten.ts'
+import { mauerZwischen, nachbarn, zellenDerMauer } from './koordinaten.ts'
 
 /** Alle Zellen, die von der Startzelle aus ohne Mauer erreichbar sind (Breitensuche) */
 export function erreichbareZellen(mauern: Mauer[], start: Zelle = 'A1'): Set<Zelle> {
@@ -19,4 +19,13 @@ export function erreichbareZellen(mauern: Mauer[], start: Zelle = 'A1'): Set<Zel
   }
 
   return besucht
+}
+
+/** Mauern am Rand des erreichbaren Bereichs: genau eine ihrer beiden Zellen ist erreichbar */
+export function problematischeMauern(mauern: Mauer[], erreichbar: Set<Zelle>): Mauer[] {
+  return mauern.filter((mauer) => {
+    const [a, b] = zellenDerMauer(mauer)
+    // Ungleich heißt: eine Seite drin, die andere draußen
+    return erreichbar.has(a) !== erreichbar.has(b)
+  })
 }

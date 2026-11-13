@@ -70,6 +70,13 @@ Deno.test('parseMauer lehnt ungültige Texte ab', () => {
   }
 })
 
+Deno.test('parseMauer kennt keinen Sprung über den Spielfeldrand', () => {
+  // Gegenüberliegende Randzellen sind keine Nachbarn
+  for (const text of ['A1_F1', 'A1_A6', 'C1_C6', 'F4_A4']) {
+    assertEquals(parseMauer(text), null, text)
+  }
+})
+
 Deno.test('nachbarn liefert vier Nachbarn in der Mitte', () => {
   assertEquals(nachbarn('C4'), ['B4', 'C5', 'D4', 'C3'])
 })

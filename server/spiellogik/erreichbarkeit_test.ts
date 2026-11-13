@@ -1,6 +1,6 @@
 import { assert, assertEquals, assertFalse } from '@std/assert'
 import type { Mauer } from '../../shared/types.ts'
-import { erreichbareZellen } from './erreichbarkeit.ts'
+import { erreichbareZellen, problematischeMauern } from './erreichbarkeit.ts'
 
 const ZEILEN = ['A', 'B', 'C', 'D', 'E', 'F']
 
@@ -32,4 +32,23 @@ Deno.test('eine Wand mit Lücke lässt den Weg offen', () => {
   // Wie oben, aber zwischen F3 und F4 fehlt die Mauer
   const wand = ZEILEN.slice(0, 5).map((z) => `${z}3_${z}4` as Mauer)
   assertEquals(erreichbareZellen(wand).size, 36)
+})
+
+// Kurzform: erst Breitensuche, dann problematische Mauern bestimmen
+function problematisch(mauern: Mauer[]): Mauer[] {
+  return problematischeMauern(mauern, erreichbareZellen(mauern))
+}
+
+Deno.test('ohne Mauern gibt es keine problematischen Mauern', () => {
+  assertEquals(problematisch([]), [])
+})
+
+Deno.test('beide Mauern um ein eingemauertes A1 sind problematisch', () => {
+  assertEquals(problematisch(['A1_A2', 'A1_B1']), ['A1_A2', 'A1_B1'])
+})
+
+Deno.test('nur die Mauern auf der Grenze sind problematisch', () => {
+  const wand = ZEILEN.map((z) => `${z}3_${z}4` as Mauer)
+  // A1_A2 liegt im erreichbaren Bereich, A5_A6 dahinter: beide nicht problematisch
+  assertEquals(problematisch(['A1_A2', ...wand, 'A5_A6']), wand)
 })
