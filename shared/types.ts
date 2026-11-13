@@ -71,3 +71,9 @@ export type Pruefung = {
 
 /** Maximale Anzahl an Mauern */
 export const MAX_MAUERN = 30
+
+/** Angemeldeter Nutzer, wie ihn der Client sieht (User in der openapi.yaml) */
+export type Nutzer = {
+  id: string
+  name: string
+}
