@@ -16,7 +16,7 @@ Die Übersicht trennt zwei Angaben.
 | ADR-002 | Server als Schiedsrichter                          | Planung  | Akzeptiert | teilweise |
 | ADR-003 | Koordinaten und Mauermodell                        | Planung  | Akzeptiert | teilweise |
 | ADR-004 | Labyrinth-Generierung und Schwierigkeit            | Planung  | Akzeptiert | geplant   |
-| ADR-005 | Anfragen entlang von Zeile oder Spalte             | Planung  | Akzeptiert | geplant   |
+| ADR-005 | Anfragen entlang von Zeile oder Spalte             | Planung  | Akzeptiert | teilweise |
 | ADR-006 | Aufbauphase unter Kontrolle des Servers            | Planung  | Akzeptiert | teilweise |
 | ADR-007 | Lösbarkeitsprüfung mit Nachbesserung               | Planung  | Akzeptiert | teilweise |
 | ADR-008 | Bereitschaftsprüfung und Abwesenheit               | Planung  | Akzeptiert | teilweise |
