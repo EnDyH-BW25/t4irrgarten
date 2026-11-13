@@ -30,7 +30,7 @@ Die Übersicht trennt zwei Angaben.
 | ADR-016 | Technologie-Stack                                  | Einrichtung | Akzeptiert | umgesetzt |
 | ADR-017 | Gemeinsame Typen im Ordner shared                  | 0        | Akzeptiert | umgesetzt |
 | ADR-018 | Einheitliches Fehlerformat im Server               | 0        | Akzeptiert | umgesetzt |
-| ADR-019 | API-Modul im Client mit Netzwerkfehler             | 0        | Akzeptiert | teilweise |
+| ADR-019 | API-Modul im Client mit Netzwerkfehler             | 0        | Akzeptiert | umgesetzt |
 | ADR-020 | Vite-Proxy statt CORS                              | 0        | Akzeptiert | umgesetzt |
 | ADR-021 | Mauern als normierte Strings und reine Funktionen  | 1        | Akzeptiert | umgesetzt |
 
@@ -467,6 +467,7 @@ Viele Komponenten im Client rufen den Server auf. Ohne gemeinsames Modul wiederh
 ### Entscheidung
 - `client/src/api.ts` stellt `get`, `post` und `put` bereit. Alle rufen `/api` plus Pfad auf.
 - Bei Erfolg liefern die Funktionen die Daten, bei Status 204 `undefined`.
+- Für das Polling gibt es `abfragen`. Bei Status 304 liefert die Funktion `null` für "nichts geändert".
 - Bei Fehlern werfen sie einen eigenen `ApiFehler` mit Status, Code, Nachricht und dem vollständigen Fehlerobjekt des Servers.
 - Der Client ergänzt den Code `NETZWERK`. Er gilt, wenn `fetch` scheitert oder der Vite-Proxy 502 bis 504 ohne das Fehlerformat meldet.
 - Fehlt bei anderen Fehlern das Fehlerformat, gilt Code `INTERN`.
@@ -480,7 +481,7 @@ Viele Komponenten im Client rufen den Server auf. Ohne gemeinsames Modul wiederh
 ### Konsequenzen
 - Antworten castet das Modul ungeprüft auf den erwarteten Typ. Weicht der Server ab, fällt das erst zur Laufzeit auf.
 - Für DELETE oder weitere Methoden muss das Modul wachsen.
-- Das Modul behandelt die Antwort 304 aus ADR-012 noch als Fehler `INTERN`. Vor dem Polling in Phase 3 braucht es eine eigene Funktion, die bei 304 `null` liefert.
+- Die erste Fassung behandelte die Antwort 304 aus ADR-012 als Fehler `INTERN`. Jeder unveränderte Abruf beim Polling wäre damit als Fehler erschienen. Seit der Ergänzung liefert `api()` bei 304 `null`, und `abfragen(pfad, since)` hängt `since` an und liefert den Typ `T | null`. Polling-Code prüft deshalb auf `null` und nicht auf einen Fehler.
 
 ---
 
