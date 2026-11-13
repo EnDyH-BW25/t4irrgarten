@@ -26,6 +26,8 @@ async function api<T>(pfad: string, optionen: RequestInit = {}): Promise<T> {
   }
 
   if (res.status === 204) return undefined as T
+  // 304 hat keinen Inhalt und heißt: nichts geändert. Nur abfragen() schickt since mit.
+  if (res.status === 304) return null as T
   const daten: unknown = await res.json().catch(() => null)
 
   if (!res.ok) {
@@ -45,6 +47,13 @@ async function api<T>(pfad: string, optionen: RequestInit = {}): Promise<T> {
 }
 
 export const get = <T>(pfad: string) => api<T>(pfad)
+
+/**
+ * Für Polling: hängt die letzte bekannte Version als since an.
+ * Liefert null, wenn sich seitdem nichts geändert hat (304).
+ */
+export const abfragen = <T>(pfad: string, since?: number) =>
+  api<T | null>(since === undefined ? pfad : `${pfad}?since=${since}`)
 
 export const post = <T>(pfad: string, daten?: unknown) =>
   api<T>(pfad, { method: 'POST', body: JSON.stringify(daten ?? {}) })

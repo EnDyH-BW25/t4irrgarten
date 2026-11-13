@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { ApiFehler, get } from '../api'
+import { abfragen, ApiFehler, get } from '../api'
 
 // Ersetzt fetch durch eine Attrappe, die immer die übergebene Antwort liefert
 function fetchAttrappe(antwort: () => Promise<Response>) {
@@ -50,5 +50,29 @@ describe('api', () => {
     const fehler = await fehlerVon(get('/health'))
     expect(fehler.code).toBe('NETZWERK')
     expect(fehler.message).toBe('Der Server ist nicht erreichbar.')
+  })
+})
+
+describe('abfragen', () => {
+  it('hängt since an den Pfad an', async () => {
+    fetchAttrappe(async () => Response.json({ version: 4 }))
+    await abfragen('/matches/1', 3)
+    expect(fetch).toHaveBeenCalledWith('/api/matches/1?since=3', expect.anything())
+  })
+
+  it('lässt since beim ersten Abruf weg', async () => {
+    fetchAttrappe(async () => Response.json({ version: 0 }))
+    await abfragen('/matches/1')
+    expect(fetch).toHaveBeenCalledWith('/api/matches/1', expect.anything())
+  })
+
+  it('liefert den neuen Stand bei 200', async () => {
+    fetchAttrappe(async () => Response.json({ version: 4 }))
+    await expect(abfragen<{ version: number }>('/matches/1', 3)).resolves.toEqual({ version: 4 })
+  })
+
+  it('liefert null bei 304 statt eines Fehlers', async () => {
+    fetchAttrappe(async () => new Response(null, { status: 304 }))
+    await expect(abfragen('/matches/1', 4)).resolves.toBeNull()
   })
 })
