@@ -1,15 +1,6 @@
 import { assert, assertEquals, assertRejects } from '@std/assert'
+import { mitTempOrdner } from '../testHilfen.ts'
 import { NutzerSpeicher } from './nutzerSpeicher.ts'
-
-/** Jeder Test bekommt einen eigenen leeren Ordner und räumt ihn danach auf */
-async function mitTempOrdner(test: (pfad: string) => Promise<void>) {
-  const ordner = await Deno.makeTempDir()
-  try {
-    await test(`${ordner}/nutzer.json`)
-  } finally {
-    await Deno.remove(ordner, { recursive: true })
-  }
-}
 
 Deno.test('laden: ohne Datei startet der Speicher leer', () =>
   mitTempOrdner(async (pfad) => {
