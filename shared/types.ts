@@ -50,3 +50,14 @@ export type Fehler = {
     problematischeMauern?: Mauer[]
   }
 }
+
+/** Antwort des Servers auf eine Anfrage */
+export type Antwort = 'ja' | 'nurBis' | 'nein' | 'schatzGefunden'
+
+/** Ergebnis einer Anfrage */
+export type AnfrageErgebnis = {
+  ziel: Zelle
+  ergebnis: Antwort
+  position: Zelle // Position nach der Anfrage
+  mauer: Mauer | null // entdeckte Mauer bei nurBis und nein, sonst null
+}
