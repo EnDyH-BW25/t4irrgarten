@@ -61,3 +61,13 @@ export type AnfrageErgebnis = {
   position: Zelle // Position nach der Anfrage
   mauer: Mauer | null // entdeckte Mauer bei nurBis und nein, sonst null
 }
+
+/** Ergebnis der Lösbarkeitsprüfung für den eigenen Entwurf */
+export type Pruefung = {
+  loesbar: boolean | null // null solange noch kein Schatz liegt
+  meldung: string | null
+  problematischeMauern: Mauer[]
+}
+
+/** Maximale Anzahl an Mauern */
+export const MAX_MAUERN = 30
