@@ -77,3 +77,7 @@ export type Nutzer = {
   id: string
   name: string
 }
+
+/** Erlaubte Längen laut Credentials in der openapi.yaml; Server und Client prüfen dieselben Werte */
+export const NAME_LAENGE = { min: 3, max: 20 }
+export const PASSWORT_LAENGE = { min: 8, max: 100 }
