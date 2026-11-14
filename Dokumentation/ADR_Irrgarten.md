@@ -1,6 +1,6 @@
 # Architecture Decision Records Irrgarten
 
-Stand 12.11.2026. Das Format folgt dem Mini-ADR aus dem Skript mit Kontext, Entscheidung, Begründung und Konsequenzen.
+Stand 14.11.2026. Das Format folgt dem Mini-ADR aus dem Skript mit Kontext, Entscheidung, Begründung und Konsequenzen.
 
 Die Datei sammelt alle Entscheidungen des Projekts nach Thema. Eine akzeptierte ADR bleibt unverändert. Ändert sich eine Entscheidung, entsteht eine neue ADR. Die alte erhält den Status "Ersetzt durch ADR-0XX".
 
@@ -25,7 +25,7 @@ Die Übersicht trennt zwei Angaben.
 | ADR-010 | Turnier mit Host, Warteraum und Computer-Auffüllung | Planung     | Akzeptiert | geplant   |
 | ADR-011 | Turnierablauf, Ausstieg und Abbruch                 | Planung     | Akzeptiert | geplant   |
 | ADR-012 | Aktualisierung per Polling                          | Planung     | Akzeptiert | teilweise |
-| ADR-013 | Kein Gastmodus                                      | Planung     | Akzeptiert | geplant   |
+| ADR-013 | Kein Gastmodus                                      | Planung     | Akzeptiert | umgesetzt |
 | ADR-014 | Ergebnisse vom Server, Statistik statt Rangliste    | Planung     | Akzeptiert | geplant   |
 | ADR-015 | Dashboard, Schwierigkeit und Einstellungen          | Planung     | Akzeptiert | geplant   |
 | ADR-016 | Technologie-Stack                                   | Einrichtung | Akzeptiert | umgesetzt |
@@ -34,6 +34,9 @@ Die Übersicht trennt zwei Angaben.
 | ADR-019 | API-Modul im Client mit Netzwerkfehler              | 0           | Akzeptiert | umgesetzt |
 | ADR-020 | Vite-Proxy statt CORS                               | 0           | Akzeptiert | umgesetzt |
 | ADR-021 | Mauern als normierte Strings und reine Funktionen   | 1           | Akzeptiert | umgesetzt |
+| ADR-022 | Passwort-Hash mit PBKDF2                            | 2           | Akzeptiert | umgesetzt |
+| ADR-023 | Sessions im Speicher und Nutzer in JSON-Datei       | 2           | Akzeptiert | umgesetzt |
+| ADR-024 | Anmeldezustand im Client und geschützte Routen      | 2           | Akzeptiert | umgesetzt |
 
 ---
 
@@ -618,6 +621,108 @@ ADR-003 legt die Notation `A1_A2` fest und plante eine Klasse `Mauer` mit Wandma
 
 ---
 
+## ADR-022 Passwort-Hash mit PBKDF2
+
+### Kontext
+
+Der Server speichert die Nutzer in `server/data/nutzer.json`. Passwörter dürfen dort nicht im Klartext stehen. Gerät die Datei in falsche Hände, wären sonst alle Konten offen. Viele Menschen nutzen ihr Passwort außerdem bei anderen Diensten.
+
+### Entscheidung
+
+- Der Server hasht Passwörter mit PBKDF2 und SHA-256 über die Web Crypto API (`crypto.subtle`), die Deno mitbringt.
+- PBKDF2 wiederholt den Hash 600.000-mal. Jeder Nutzer erhält ein eigenes Salt aus 16 zufälligen Bytes.
+- Gespeichert wird ein Text im Format `iterationen:salt:hash`, Salt und Hash in Hex.
+- `passwortPruefen` vergleicht die Hashes in konstanter Zeit.
+- `passwortHashen` und `passwortPruefen` liegen in `server/auth/passwort.ts`. Ein kaputter gespeicherter Text ergibt `false`, keinen Fehler.
+
+### Begründung
+
+- Web Crypto gehört zu Deno. Das Projekt braucht kein zusätzliches Paket.
+- 600.000 Wiederholungen entsprechen der Empfehlung von OWASP für PBKDF2 mit SHA-256. Ein Angreifer kann dadurch nur wenige Passwörter pro Sekunde durchprobieren.
+- Das Salt macht vorberechnete Tabellen nutzlos. Zwei Nutzer mit demselben Passwort haben verschiedene Hashes.
+- Die Iterationen stehen im gespeicherten Text. Ein höherer Wert gilt dann für neue Hashes, alte bleiben prüfbar.
+- Ein Vergleich, der beim ersten Unterschied abbricht, verrät über die Laufzeit, wie viele Bytes stimmen. Der Vergleich in konstanter Zeit schließt das aus.
+- Verworfen wurde ein einfacher SHA-256-Hash. Er ist absichtlich schnell und erlaubt Milliarden Versuche pro Sekunde.
+- Verworfen wurden bcrypt und Argon2. Beide brauchen in Deno ein zusätzliches Paket. Argon2 gilt als stärkste Wahl, PBKDF2 reicht für das Projekt aber aus.
+
+### Konsequenzen
+
+- Ein Hash dauert etwa 130 ms. Login und Registrierung sind dadurch spürbar, aber nicht störend langsam.
+- Die Registrierung prüft den Namen vor dem Hashen. Ein vergebener Name kostet so keine Rechenzeit.
+- Tests mit Passwörtern laufen langsamer als die Tests der Spiellogik.
+
+---
+
+## ADR-023 Sessions im Speicher und Nutzer in JSON-Datei
+
+### Kontext
+
+Der Vertrag in `openapi.yaml` verlangt eine Session über das Cookie `sid` mit `HttpOnly`. Jeder Endpunkt außer Registrierung und Login verlangt eine Session (ADR-013). Der Umsetzungsplan sieht für die Nutzer JSON-Dateien in `server/data/` vor. Offen war, wo die Sessions liegen und wie der Server Datei und Anfragen sicher zusammenbringt.
+
+### Entscheidung
+
+- **Nutzer:** Die Klasse `NutzerSpeicher` lädt `server/data/nutzer.json` beim Start in den Speicher. Jede Änderung schreibt die ganze Liste zurück. Die Schreibvorgänge laufen nacheinander über eine Promise-Kette und zuerst in eine temporäre Datei, die danach die alte ersetzt.
+- **Sessions:** Die Klasse `Sessions` hält eine `Map` von Session-Id zu Nutzer-Id im Speicher. Die Session-Id entsteht mit `crypto.randomUUID()`. Sessions haben keine Ablaufzeit.
+- **Cookie:** `sid` mit `HttpOnly`, `SameSite=Lax` und `Path=/api`.
+- **Middleware:** `anmeldungPruefen` liest das Cookie, sucht Session und Nutzer und legt nur Id und Name in `c.var.nutzer` ab. Ohne gültige Session antwortet sie mit 401 `NICHT_ANGEMELDET`.
+- **Namen:** Der Server entfernt Leerzeichen am Rand. Groß- und Kleinschreibung zählen beim Vergleich nicht. `Nudl` und `nudl` sind derselbe Name.
+- **Login:** Unbekannter Name und falsches Passwort ergeben dieselbe Meldung "Name oder Passwort falsch.".
+- Ein neuer Login im selben Browser beendet die alte Session.
+- `main.ts` baut die App über `appErstellen(sessions, speicher)`. Tests geben einen Speicher in einem Temp-Ordner hinein.
+
+### Begründung
+
+- Eine JSON-Datei reicht für wenige Nutzer und braucht keine Datenbank. Alle Nutzer im Speicher machen jede Suche sofort möglich.
+- Ohne die Promise-Kette überschneiden sich zwei gleichzeitige Schreibvorgänge. Ohne die temporäre Datei hinterlässt ein Absturz beim Schreiben eine halbe, ungültige Datei, und alle Nutzer sind verloren.
+- `HttpOnly` hält die Session-Id von Skripten im Browser fern. `SameSite=Lax` verhindert, dass fremde Seiten Aktionen im Namen des Nutzers auslösen (CSRF).
+- Nur Id und Name in `c.var.nutzer` verhindern, dass ein Handler den Passwort-Hash versehentlich zurückschickt.
+- Dieselbe Login-Meldung verrät nicht, ob ein Name existiert.
+- Verworfen wurden Sessions in einer Datei. Nach einem Neustart neu anzumelden ist für das Projekt zumutbar und spart Schreibzugriffe bei jedem Login.
+- Verworfen wurden JSON Web Tokens. Ein Logout ist damit nur über zusätzliche Sperrlisten möglich, und bei einem einzigen Server bringen sie keinen Vorteil.
+
+### Konsequenzen
+
+- Nach einem Neustart des Servers muss sich jeder neu anmelden.
+- Sessions enden nur durch Logout, neuen Login im selben Browser oder Neustart.
+- Das Cookie hat kein `Secure`, weil die Entwicklung über `http://localhost` läuft. Für einen Betrieb über HTTPS gehört es dazu.
+- Die gleiche Login-Meldung schützt nur teilweise. Die Registrierung meldet einen vergebenen Namen mit 409, und ein Login mit bekanntem Namen dauert wegen des Hashens länger.
+- Der Server begrenzt fehlgeschlagene Login-Versuche nicht.
+- Der Server braucht Leserechte und Schreibrechte für den Ordner `data` (`--allow-write=data`). Die Tests laufen über `deno task test`.
+
+---
+
+## ADR-024 Anmeldezustand im Client und geschützte Routen
+
+### Kontext
+
+Der Client muss wissen, wer angemeldet ist. Startseite, Kopfzeile und Router brauchen diese Information gleichzeitig. Nach dem Neuladen der Seite ist der Speicher des Clients leer, das Cookie gilt aber weiter. Seiten wie das Dashboard sollen ohne Anmeldung nicht erscheinen.
+
+### Entscheidung
+
+- `client/src/anmeldung.ts` hält den Nutzer in einem `ref` auf Modulebene. Die Funktionen `anmelden`, `registrieren`, `abmelden` und `pruefen` ändern diesen Wert.
+- `anmelden` und `registrieren` reichen den `ApiFehler` unverändert weiter. Das Formular zeigt Feldfehler am Feld und alle anderen Fehler als Meldung.
+- `abmelden` wertet 401 als Erfolg, weil die Session dann schon beendet ist.
+- Ein Router-Guard fragt beim ersten Seitenwechsel einmal `/auth/me`. Ist der Server nicht erreichbar, fragt er beim nächsten Wechsel erneut.
+- Jede Route ist geschützt. Nur Routen mit `meta: { oeffentlich: true }` sind ohne Anmeldung erreichbar, aktuell nur die Startseite. Angemeldete Nutzer leitet der Guard von der Startseite zum Dashboard.
+- Das Formular prüft Namen und Passwort vorab mit `NAME_LAENGE` und `PASSWORT_LAENGE` aus `shared/types.ts`. Die Wiederholung des Passworts prüft nur der Client.
+
+### Begründung
+
+- Ein `ref` auf Modulebene existiert genau einmal. Alle Komponenten sehen denselben Wert, und Vue zeichnet sie bei Änderungen neu.
+- Verworfen wurde Pinia. Die Bibliothek müsste installiert werden, und für einen einzigen Wert lohnt sich das nicht.
+- Verworfen wurde "offen als Standard" mit einer Markierung für geschützte Routen. Eine vergessene Markierung ließe eine Seite unbemerkt offen. Eine vergessene Markierung bei "geschützt als Standard" fällt dagegen sofort auf.
+- Gleiche Grenzen in Server und Client verhindern, dass das Formular Eingaben durchlässt, die der Server ablehnt.
+- Der Guard dient dem Komfort. Die Sicherheit liegt beim Server, der jede Anfrage ohne Session mit 401 beantwortet.
+
+### Konsequenzen
+
+- Neue Seiten in späteren Phasen sind ohne zusätzliche Angabe geschützt.
+- Eine weitere öffentliche Seite braucht `meta: { oeffentlich: true }`.
+- `routerErstellen(history)` baut den Router. Tests erzeugen damit für jeden Fall einen frischen Router im Speicher.
+- Wächst der gemeinsame Zustand in späteren Phasen deutlich, lohnt sich ein Wechsel zu Pinia.
+
+---
+
 ## Offene Punkte und Erweiterungen
 
 Diese Punkte sind bewusst nicht entschieden oder als Erweiterung zurückgestellt.
@@ -629,3 +734,4 @@ Diese Punkte sind bewusst nicht entschieden oder als Erweiterung zurückgestellt
 - Gastmodus nur gegen den Computer, mit Ergebnissen im Speicher der Seite.
 - Nutzername und Passwort ändern.
 - Rangliste über alle Spieler, gezählt nur mit Siegen gegen Menschen.
+- Ablaufzeit für Sessions, `Secure` am Cookie für den Betrieb über HTTPS und eine Begrenzung fehlgeschlagener Login-Versuche (siehe ADR-023).

@@ -99,7 +99,7 @@ Der Button "Ergebnisse" öffnet die vollständige Liste meiner gewonnen und verl
 Die Anwendung zeigt eine Fehlermeldung in den folgenden Fällen: 
  
 - Der Benutzername ist vergeben. 
-- Das Passwort ist falsch. 
+- Name oder Passwort sind beim Login falsch. Die Meldung verrät nicht, welche der beiden Angaben falsch ist. 
 - Die beiden Passwörter bei der Registrierung stimmen nicht überein. 
 - Der Spielcode ist ungültig oder abgelaufen. Das gilt auch, wenn ein Duell-Code im Feld "Turnier beitreten" steht oder umgekehrt. 
 - Das Turnier ist voll oder läuft bereits. 
