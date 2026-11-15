@@ -21,6 +21,26 @@ export function erreichbareZellen(mauern: Mauer[], start: Zelle = 'A1'): Set<Zel
   return besucht
 }
 
+/** Kürzeste Schrittzahl von der Startzelle zu jeder erreichbaren Zelle (Breitensuche) */
+export function abstaende(mauern: Mauer[], start: Zelle = 'A1'): Map<Zelle, number> {
+  const gesperrt = new Set(mauern)
+  const abstand = new Map<Zelle, number>([[start, 0]])
+  const warteschlange: Zelle[] = [start]
+
+  while (warteschlange.length > 0) {
+    const zelle = warteschlange.shift()!
+    for (const nachbar of nachbarn(zelle)) {
+      if (abstand.has(nachbar)) continue
+      if (gesperrt.has(mauerZwischen(zelle, nachbar))) continue
+      // Die Breitensuche erreicht jede Zelle zuerst auf dem kürzesten Weg
+      abstand.set(nachbar, abstand.get(zelle)! + 1)
+      warteschlange.push(nachbar)
+    }
+  }
+
+  return abstand
+}
+
 /** Mauern am Rand des erreichbaren Bereichs: genau eine ihrer beiden Zellen ist erreichbar */
 export function problematischeMauern(mauern: Mauer[], erreichbar: Set<Zelle>): Mauer[] {
   return mauern.filter((mauer) => {

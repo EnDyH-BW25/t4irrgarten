@@ -1,6 +1,6 @@
 import { assert, assertEquals, assertFalse } from '@std/assert'
 import type { Mauer } from '../../shared/types.ts'
-import { erreichbareZellen, problematischeMauern } from './erreichbarkeit.ts'
+import { abstaende, erreichbareZellen, problematischeMauern } from './erreichbarkeit.ts'
 
 const ZEILEN = ['A', 'B', 'C', 'D', 'E', 'F']
 
@@ -51,4 +51,22 @@ Deno.test('nur die Mauern auf der Grenze sind problematisch', () => {
   const wand = ZEILEN.map((z) => `${z}3_${z}4` as Mauer)
   // A1_A2 liegt im erreichbaren Bereich, A5_A6 dahinter: beide nicht problematisch
   assertEquals(problematisch(['A1_A2', ...wand, 'A5_A6']), wand)
+})
+
+Deno.test('abstaende: ohne Mauern liegt F6 zehn Schritte von A1 entfernt', () => {
+  const abstand = abstaende([])
+  assertEquals(abstand.get('A1'), 0)
+  assertEquals(abstand.get('B2'), 2)
+  assertEquals(abstand.get('F6'), 10)
+})
+
+Deno.test('abstaende: eine Mauer erzwingt einen Umweg', () => {
+  // A1 -> B1 -> B2 -> A2 statt direkt nach A2
+  assertEquals(abstaende(['A1_A2']).get('A2'), 3)
+})
+
+Deno.test('abstaende: eingemauerte Zellen fehlen in der Liste', () => {
+  const abstand = abstaende(['A1_A2', 'A1_B1'])
+  assertEquals(abstand.size, 1)
+  assertFalse(abstand.has('A2'))
 })
