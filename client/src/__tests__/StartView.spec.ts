@@ -1,10 +1,11 @@
+import type { Nutzer } from '@shared/types.ts'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import StartView from '../views/StartView.vue'
 import { nutzer } from '../anmeldung'
 
-const NUDL = { id: 'id-1', name: 'nudl' }
+const NUDL: Nutzer = { id: 'id-1', name: 'nudl', schwierigkeit: 'standard' }
 
 // Eigener Router im Speicher, damit der Test den Wechsel zum Dashboard sieht
 async function aufbauen() {

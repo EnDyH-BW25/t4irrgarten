@@ -55,3 +55,30 @@ Deno.test('laden: kaputte Datei wirft, statt alle Nutzer zu überschreiben', () 
     await Deno.writeTextFile(pfad, '{kaputt')
     await assertRejects(() => NutzerSpeicher.laden(pfad), SyntaxError)
   }))
+
+Deno.test('schwierigkeit: neue Nutzer starten mit standard', () =>
+  mitTempOrdner(async (pfad) => {
+    const neu = await (await NutzerSpeicher.laden(pfad)).anlegen('nudl', 'hash')
+    assertEquals(neu?.schwierigkeit, 'standard')
+  }))
+
+Deno.test('schwierigkeitMerken: bleibt nach erneutem Laden erhalten', () =>
+  mitTempOrdner(async (pfad) => {
+    const speicher = await NutzerSpeicher.laden(pfad)
+    const neu = await speicher.anlegen('nudl', 'hash')
+    await speicher.schwierigkeitMerken(neu!.id, 'schwer')
+    assertEquals((await NutzerSpeicher.laden(pfad)).nachId(neu!.id)?.schwierigkeit, 'schwer')
+  }))
+
+Deno.test('schwierigkeitMerken: unbekannte Id ändert nichts und wirft nicht', () =>
+  mitTempOrdner(async (pfad) => {
+    const speicher = await NutzerSpeicher.laden(pfad)
+    await speicher.schwierigkeitMerken('gibt-es-nicht', 'schwer')
+    assertEquals(speicher.nachId('gibt-es-nicht'), null)
+  }))
+
+Deno.test('laden: Konten ohne Schwierigkeit (aus Phase 2) erhalten standard', () =>
+  mitTempOrdner(async (pfad) => {
+    await Deno.writeTextFile(pfad, JSON.stringify([{ id: 'alt', name: 'alt', passwortHash: 'h' }]))
+    assertEquals((await NutzerSpeicher.laden(pfad)).nachId('alt')?.schwierigkeit, 'standard')
+  }))

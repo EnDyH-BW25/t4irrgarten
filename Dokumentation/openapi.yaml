@@ -158,6 +158,25 @@ paths:
         '409':
           $ref: '#/components/responses/Konflikt'
 
+  /matches/current:
+    get:
+      tags: [Matches]
+      summary: Eigenes offenes Match abrufen
+      description: |
+        Liefert das Match, in dem der Nutzer gerade spielt. Damit findet das Dashboard ein Spiel wieder, wenn der Tab geschlossen wurde.
+        Offen ist jedes Match außer `beendet` und `abgebrochen`. Abgelaufene Fristen trägt der Server vorher nach.
+      responses:
+        '200':
+          description: Offenes Match aus Sicht des Nutzers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Match'
+        '401':
+          $ref: '#/components/responses/NichtAngemeldet'
+        '404':
+          $ref: '#/components/responses/NichtGefunden'
+
   /matches/join:
     post:
       tags: [Matches]
@@ -757,13 +776,17 @@ components:
 
     User:
       type: object
-      required: [id, name]
+      required: [id, name, schwierigkeit]
       properties:
         id:
           type: string
           format: uuid
         name:
           type: string
+        schwierigkeit:
+          allOf:
+            - $ref: '#/components/schemas/Schwierigkeit'
+          description: Zuletzt gespielte Schwierigkeit gegen den Computer. Das Dashboard wählt sie vor. Neue Nutzer haben `standard`.
 
     Zelle:
       type: string
@@ -851,7 +874,7 @@ components:
           enum: [computer, duell]
         schwierigkeit:
           $ref: '#/components/schemas/Schwierigkeit'
-      description: '`schwierigkeit` ist im Modus `computer` Pflicht und im Modus `duell` verboten.'
+      description: '`schwierigkeit` ist im Modus `computer` Pflicht und im Modus `duell` verboten. Der Server merkt sie sich beim Nutzer.'
 
     MatchStatus:
       type: string

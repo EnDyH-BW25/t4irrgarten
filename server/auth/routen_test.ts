@@ -35,7 +35,7 @@ Deno.test('register: legt Nutzer an, setzt Cookie und meldet an', () =>
     assertEquals(res.status, 201)
     const nutzer = await res.json()
     assertEquals(nutzer.name, 'nudl')
-    assertEquals(Object.keys(nutzer).sort(), ['id', 'name'])
+    assertEquals(Object.keys(nutzer).sort(), ['id', 'name', 'schwierigkeit'])
 
     const cookie = res.headers.get('Set-Cookie') ?? ''
     assertMatch(cookie, /HttpOnly/)

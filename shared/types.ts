@@ -73,6 +73,7 @@ export type Pruefung = {
 export type Nutzer = {
   id: string
   name: string
+  schwierigkeit: Schwierigkeit // zuletzt gegen den Computer gespielt, vorgewählt im Dashboard
 }
 
 /** Schwierigkeit des Computer-Labyrinths; wirkt nur im Modus computer */

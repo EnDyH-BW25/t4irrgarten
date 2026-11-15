@@ -1,8 +1,9 @@
+import type { Nutzer } from '@shared/types.ts'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { ApiFehler } from '../api'
 import { abmelden, anmelden, nutzer, pruefen, registrieren } from '../anmeldung'
 
-const NUDL = { id: 'id-1', name: 'nudl' }
+const NUDL: Nutzer = { id: 'id-1', name: 'nudl', schwierigkeit: 'standard' }
 
 // Ersetzt fetch durch eine Attrappe und gibt sie zurück, damit Tests die Aufrufe prüfen können
 function fetchAttrappe(antwort: () => Promise<Response>) {

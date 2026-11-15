@@ -2,7 +2,7 @@ import { getCookie } from '@hono/hono/cookie'
 import { createMiddleware } from '@hono/hono/factory'
 import type { Nutzer } from '../../shared/types.ts'
 import { ApiFehler } from '../fehler.ts'
-import type { NutzerSpeicher } from './nutzerSpeicher.ts'
+import { alsNutzer, type NutzerSpeicher } from './nutzerSpeicher.ts'
 import type { Sessions } from './sessions.ts'
 
 /** Name des Session-Cookies laut openapi.yaml */
@@ -22,8 +22,8 @@ export function anmeldungPruefen(sessions: Sessions, speicher: NutzerSpeicher) {
     if (!sid || !gespeichert) {
       throw new ApiFehler(401, 'NICHT_ANGEMELDET', 'Bitte melde dich an.')
     }
-    // Nur Id und Name weitergeben, der Hash bleibt im Speicher
-    c.set('nutzer', { id: gespeichert.id, name: gespeichert.name })
+    // Ohne Passwort-Hash weitergeben, der Hash bleibt im Speicher
+    c.set('nutzer', alsNutzer(gespeichert))
     c.set('sid', sid)
     await next()
   })

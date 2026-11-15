@@ -26,7 +26,7 @@ Deno.test('anmeldungPruefen: gültige Session gibt den Nutzer ohne Hash weiter',
     const { sessions, nudl, abrufen } = await aufbauen(pfad)
     const res = await abrufen(sessions.starten(nudl.id))
     assertEquals(res.status, 200)
-    assertEquals(await res.json(), { id: nudl.id, name: 'nudl' })
+    assertEquals(await res.json(), { id: nudl.id, name: 'nudl', schwierigkeit: 'standard' })
   }))
 
 Deno.test('anmeldungPruefen: ohne Cookie 401 NICHT_ANGEMELDET', () =>

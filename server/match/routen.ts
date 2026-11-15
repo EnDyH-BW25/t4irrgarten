@@ -53,7 +53,15 @@ export function matchRouten(
     }
     const match = computerMatchErstellen(nutzer, schwierigkeit, uhr(), zufall)
     matches.anlegen(match)
+    await nutzerSpeicher.schwierigkeitMerken(nutzer.id, schwierigkeit)
     return ansicht(c, match, 201)
+  })
+
+  // Steht vor /:id, sonst hielte Hono "current" für eine Match-Id
+  routen.get('/current', (c) => {
+    const match = matches.offenesMatchVon(c.get('nutzer').id)
+    if (!match) throw new ApiFehler(404, 'NICHT_GEFUNDEN', 'Du hast kein offenes Match.')
+    return ansicht(c, match)
   })
 
   routen.get('/:id', (c) => {

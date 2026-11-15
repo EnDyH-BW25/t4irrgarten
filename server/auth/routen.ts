@@ -5,7 +5,7 @@ import type { CookieOptions } from '@hono/hono/utils/cookie'
 import type { Nutzer } from '../../shared/types.ts'
 import { ApiFehler } from '../fehler.ts'
 import { anmeldungPruefen, type AuthUmgebung, COOKIE_NAME } from './anmeldung.ts'
-import type { NutzerSpeicher } from './nutzerSpeicher.ts'
+import { alsNutzer, type GespeicherterNutzer, type NutzerSpeicher } from './nutzerSpeicher.ts'
 import { passwortHashen, passwortPruefen } from './passwort.ts'
 import type { Sessions } from './sessions.ts'
 import { type Zugangsdaten, zugangsdatenPruefen } from './zugangsdaten.ts'
@@ -27,11 +27,11 @@ export function authRouten(sessions: Sessions, speicher: NutzerSpeicher) {
   const routen = new Hono<AuthUmgebung>()
 
   /** Beendet eine alte Session dieses Browsers und startet eine neue */
-  function sessionStarten(c: Context, nutzer: Nutzer): Nutzer {
+  function sessionStarten(c: Context, nutzer: GespeicherterNutzer): Nutzer {
     const alt = getCookie(c, COOKIE_NAME)
     if (alt) sessions.beenden(alt)
     setCookie(c, COOKIE_NAME, sessions.starten(nutzer.id), COOKIE_OPTIONEN)
-    return { id: nutzer.id, name: nutzer.name }
+    return alsNutzer(nutzer)
   }
 
   routen.post('/register', async (c) => {

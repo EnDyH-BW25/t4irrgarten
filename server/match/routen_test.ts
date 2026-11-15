@@ -56,7 +56,12 @@ async function aufbauen(pfad: string) {
     return id
   }
 
-  return { matches, anmelden, senden, neuesMatch, laufendesMatch }
+  /** Liest den angemeldeten Nutzer über /auth/me */
+  async function ich(sid: string) {
+    return await (await app.request('/api/auth/me', { headers: { Cookie: `sid=${sid}` } })).json()
+  }
+
+  return { matches, anmelden, senden, ich, neuesMatch, laufendesMatch }
 }
 
 /** Prüft Status und Fehlercode einer Fehlerantwort */
@@ -109,6 +114,49 @@ Deno.test('POST /matches: zweites offenes Match ergibt 409', () =>
     const sid = await anmelden('nudl')
     await senden(sid, 'POST', '', COMPUTER_MATCH)
     await fehler(await senden(sid, 'POST', '', COMPUTER_MATCH), 409, 'KONFLIKT')
+  }))
+
+Deno.test('POST /matches: merkt sich die Schwierigkeit im Account', () =>
+  mitTempOrdner(async (pfad) => {
+    const { anmelden, senden, ich } = await aufbauen(pfad)
+    const sid = await anmelden('nudl')
+    assertEquals((await ich(sid)).schwierigkeit, 'standard')
+    await senden(sid, 'POST', '', { modus: 'computer', schwierigkeit: 'schwer' })
+    assertEquals((await ich(sid)).schwierigkeit, 'schwer')
+  }))
+
+Deno.test('POST /matches: abgelehntes Match ändert die Schwierigkeit nicht', () =>
+  mitTempOrdner(async (pfad) => {
+    const { anmelden, senden, ich } = await aufbauen(pfad)
+    const sid = await anmelden('nudl')
+    await senden(sid, 'POST', '', { modus: 'computer', schwierigkeit: 'einfach' })
+    // 409: Es gibt schon ein offenes Match. Die Wahl zählt nicht als gespielt.
+    await senden(sid, 'POST', '', { modus: 'computer', schwierigkeit: 'schwer' })
+    assertEquals((await ich(sid)).schwierigkeit, 'einfach')
+  }))
+
+// ---------- GET /matches/current ----------
+
+Deno.test('GET /current: liefert das offene Match, danach 404', () =>
+  mitTempOrdner(async (pfad) => {
+    const { anmelden, senden, neuesMatch } = await aufbauen(pfad)
+    const sid = await anmelden('nudl')
+    await fehler(await senden(sid, 'GET', '/current'), 404, 'NICHT_GEFUNDEN')
+
+    const id = await neuesMatch(sid)
+    const res = await senden(sid, 'GET', '/current')
+    assertEquals(res.status, 200)
+    assertEquals((await res.json()).id, id)
+
+    await senden(sid, 'POST', `/${id}/resign`)
+    await fehler(await senden(sid, 'GET', '/current'), 404, 'NICHT_GEFUNDEN')
+  }))
+
+Deno.test('GET /current: zeigt nie das Match eines anderen', () =>
+  mitTempOrdner(async (pfad) => {
+    const { anmelden, senden, neuesMatch } = await aufbauen(pfad)
+    await neuesMatch(await anmelden('nudl'))
+    await fehler(await senden(await anmelden('knoedel'), 'GET', '/current'), 404, 'NICHT_GEFUNDEN')
   }))
 
 // ---------- GET /matches/:id ----------

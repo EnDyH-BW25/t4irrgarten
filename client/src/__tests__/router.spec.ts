@@ -1,10 +1,11 @@
+import type { Nutzer } from '@shared/types.ts'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { createMemoryHistory } from 'vue-router'
 import { routerErstellen } from '../router'
 import { nutzer } from '../anmeldung'
 import { nichtAngemeldet, nichtErreichbar, serverAttrappe } from './hilfen'
 
-const NUDL = { id: 'id-1', name: 'nudl' }
+const NUDL: Nutzer = { id: 'id-1', name: 'nudl', schwierigkeit: 'standard' }
 const angemeldet = () => Response.json(NUDL)
 
 /** Neuer Router wie nach dem Laden der Seite, liefert den Pfad nach der Navigation */

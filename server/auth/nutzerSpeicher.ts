@@ -1,7 +1,12 @@
-import type { Nutzer } from '../../shared/types.ts'
+import type { Nutzer, Schwierigkeit } from '../../shared/types.ts'
 
 /** Nutzer mit Passwort-Hash; verlässt nie den Server */
 export type GespeicherterNutzer = Nutzer & { passwortHash: string }
+
+/** Nur die Felder, die der Client sehen darf. Jedes Feld einzeln, damit der Hash nie mitrutscht. */
+export function alsNutzer(n: GespeicherterNutzer): Nutzer {
+  return { id: n.id, name: n.name, schwierigkeit: n.schwierigkeit }
+}
 
 /** Hält alle Nutzer im Speicher und schreibt jede Änderung in eine JSON-Datei */
 export class NutzerSpeicher {
@@ -16,7 +21,10 @@ export class NutzerSpeicher {
   static async laden(pfad: string): Promise<NutzerSpeicher> {
     try {
       const text = await Deno.readTextFile(pfad)
-      return new NutzerSpeicher(pfad, JSON.parse(text))
+      const gelesen: GespeicherterNutzer[] = JSON.parse(text)
+      // Konten aus Phase 2 kennen die Schwierigkeit noch nicht
+      for (const n of gelesen) n.schwierigkeit ??= 'standard'
+      return new NutzerSpeicher(pfad, gelesen)
     } catch (err) {
       if (err instanceof Deno.errors.NotFound) return new NutzerSpeicher(pfad, [])
       throw err
@@ -36,10 +44,23 @@ export class NutzerSpeicher {
   /** Legt einen Nutzer an; null, wenn der Name schon vergeben ist */
   async anlegen(name: string, passwortHash: string): Promise<GespeicherterNutzer | null> {
     if (this.nachName(name)) return null
-    const neu: GespeicherterNutzer = { id: crypto.randomUUID(), name, passwortHash }
+    const neu: GespeicherterNutzer = {
+      id: crypto.randomUUID(),
+      name,
+      schwierigkeit: 'standard',
+      passwortHash,
+    }
     this.nutzer.push(neu)
     await this.speichern()
     return neu
+  }
+
+  /** Merkt sich die zuletzt gespielte Schwierigkeit. Schreibt nur, wenn sie sich ändert. */
+  async schwierigkeitMerken(id: string, schwierigkeit: Schwierigkeit): Promise<void> {
+    const nutzer = this.nachId(id)
+    if (!nutzer || nutzer.schwierigkeit === schwierigkeit) return
+    nutzer.schwierigkeit = schwierigkeit
+    await this.speichern()
   }
 
   /** Schreibt nacheinander und über eine temporäre Datei, damit die Datei nie halb fertig ist */

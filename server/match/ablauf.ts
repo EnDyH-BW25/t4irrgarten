@@ -25,7 +25,7 @@ export const AUFBAU_DAUER_MS = 3 * 60 * 1000
 
 /** Legt ein Match gegen den Computer an. Der Computer hat sein Labyrinth sofort gesetzt. */
 export function computerMatchErstellen(
-  nutzer: Nutzer,
+  nutzer: Pick<Nutzer, 'id' | 'name'>,
   schwierigkeit: Schwierigkeit,
   jetzt: Date,
   zufall: Zufall = Math.random,
