@@ -1,0 +1,52 @@
+import type { Bereitschaft, Match } from '../../shared/types.ts'
+import { loesbarkeitPruefen } from '../spiellogik/regeln.ts'
+import { gesetztesLabyrinth, teilnehmer } from './ablauf.ts'
+import type { MatchIntern, SpielerDaten } from './typen.ts'
+
+/** Bereitschaft eines Spielers; Startbestätigung und Nachbesserung folgen in Phase 4 */
+function bereitschaft(s: SpielerDaten): Bereitschaft {
+  return {
+    labyrinthGesetzt: s.gesetzt,
+    startBestaetigt: false,
+    nachbesserungEndeAm: null,
+  }
+}
+
+/**
+ * Sicht eines Spielers auf das Match. Jedes Feld steht einzeln da, damit nichts Geheimes
+ * mitrutscht. Das Labyrinth des Gegners gibt es erst nach Spielende.
+ */
+export function ansichtFuer(match: MatchIntern, nutzerId: string, jetzt: Date): Match {
+  const { ich, gegner } = teilnehmer(match, nutzerId)
+
+  return {
+    id: match.id,
+    version: match.version,
+    serverZeit: jetzt.toISOString(),
+    modus: match.modus,
+    schwierigkeit: match.schwierigkeit,
+    status: match.status,
+    code: null,
+    competitionId: null,
+    spieler: match.spieler.map((s) => ({ id: s.id, name: s.name, istComputer: s.istComputer })),
+    amZug: match.amZug,
+    anfrageNr: match.anfrageNr,
+    aufbauEndeAm: match.aufbauEndeAm?.toISOString() ?? null,
+    startFristEndeAm: null,
+
+    // Bereitschaft
+    ich: bereitschaft(ich),
+    gegner: gegner ? bereitschaft(gegner) : null,
+
+    // Labyrinth und Karten
+    pruefung: match.status === 'aufbau' ? loesbarkeitPruefen(ich.entwurf) : null,
+    meinLabyrinth: ich.entwurf,
+    bekannteKarte: ich.karte,
+    gegnerKarte: gegner?.karte ?? null,
+
+    // Ende
+    siegerId: match.siegerId,
+    endegrund: match.endegrund,
+    gegnerLabyrinth: match.status === 'beendet' && gegner ? gesetztesLabyrinth(gegner) : null,
+  }
+}
