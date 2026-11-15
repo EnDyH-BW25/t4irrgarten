@@ -20,6 +20,13 @@ export function routerErstellen(history: RouterHistory) {
         name: 'dashboard',
         component: () => import('@/views/DashboardView.vue'),
       },
+      {
+        // props: true gibt :id als Prop an die View, statt dass sie die Route selbst liest
+        path: '/spiel/:id',
+        name: 'spiel',
+        component: () => import('@/views/SpielView.vue'),
+        props: true,
+      },
       { path: '/:pfad(.*)*', redirect: '/' },
     ],
   })

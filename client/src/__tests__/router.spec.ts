@@ -43,6 +43,11 @@ describe('Router-Guard', () => {
     expect((await oeffnen('/')).pfad).toBe('/dashboard')
   })
 
+  it('schützt die Spielseite wie das Dashboard', async () => {
+    serverAttrappe({ '/api/auth/me': nichtAngemeldet })
+    expect((await oeffnen('/spiel/match-1')).pfad).toBe('/')
+  })
+
   it('schützt unbekannte Pfade über die Umleitung auf die Startseite', async () => {
     serverAttrappe({ '/api/auth/me': nichtAngemeldet })
     expect((await oeffnen('/gibt-es-nicht')).pfad).toBe('/')
