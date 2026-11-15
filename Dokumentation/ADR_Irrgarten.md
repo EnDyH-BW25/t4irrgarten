@@ -1,6 +1,6 @@
 # Architecture Decision Records Irrgarten
 
-Stand 14.11.2026. Das Format folgt dem Mini-ADR aus dem Skript mit Kontext, Entscheidung, Begründung und Konsequenzen.
+Stand 15.11.2026. Das Format folgt dem Mini-ADR aus dem Skript mit Kontext, Entscheidung, Begründung und Konsequenzen.
 
 Die Datei sammelt alle Entscheidungen des Projekts nach Thema. Eine akzeptierte ADR bleibt unverändert. Ändert sich eine Entscheidung, entsteht eine neue ADR. Die alte erhält den Status "Ersetzt durch ADR-0XX".
 
@@ -16,7 +16,7 @@ Die Übersicht trennt zwei Angaben.
 | ADR-001 | Anwendungsfälle in Klartext vor dem API-Vertrag     | Planung     | Akzeptiert | umgesetzt |
 | ADR-002 | Server als Schiedsrichter                           | Planung     | Akzeptiert | teilweise |
 | ADR-003 | Koordinaten und Mauermodell                         | Planung     | Akzeptiert | teilweise |
-| ADR-004 | Labyrinth-Generierung und Schwierigkeit             | Planung     | Akzeptiert | geplant   |
+| ADR-004 | Labyrinth-Generierung und Schwierigkeit             | Planung     | Akzeptiert | umgesetzt |
 | ADR-005 | Anfragen entlang von Zeile oder Spalte              | Planung     | Akzeptiert | teilweise |
 | ADR-006 | Aufbauphase unter Kontrolle des Servers             | Planung     | Akzeptiert | teilweise |
 | ADR-007 | Lösbarkeitsprüfung mit Nachbesserung                | Planung     | Akzeptiert | teilweise |
@@ -37,6 +37,7 @@ Die Übersicht trennt zwei Angaben.
 | ADR-022 | Passwort-Hash mit PBKDF2                            | 2           | Akzeptiert | umgesetzt |
 | ADR-023 | Sessions im Speicher und Nutzer in JSON-Datei       | 2           | Akzeptiert | umgesetzt |
 | ADR-024 | Anmeldezustand im Client und geschützte Routen      | 2           | Akzeptiert | umgesetzt |
+| ADR-025 | Schatzplatzierung nach Schwierigkeit des Wegs       | 3           | Akzeptiert | umgesetzt |
 
 ---
 
@@ -720,6 +721,43 @@ Der Client muss wissen, wer angemeldet ist. Startseite, Kopfzeile und Router bra
 - Eine weitere öffentliche Seite braucht `meta: { oeffentlich: true }`.
 - `routerErstellen(history)` baut den Router. Tests erzeugen damit für jeden Fall einen frischen Router im Speicher.
 - Wächst der gemeinsame Zustand in späteren Phasen deutlich, lohnt sich ein Wechsel zu Pinia.
+
+---
+
+## ADR-025 Schatzplatzierung nach Schwierigkeit des Wegs
+
+### Kontext
+
+ADR-004 legt fest, wie der Server das Labyrinth des Computers erzeugt. Die Schwierigkeit soll er an der Länge des kürzesten Wegs, an der Zahl der Abbiegungen und an der Zahl der Sackgassen messen. Offen blieb, wie diese Maße die Lage des Schatzes bestimmen.
+
+Die erste Umsetzung loste den Schatz bei `schwer` aus den Zellen mit dem längsten Weg von A1. Eine Anfrage läuft aber eine ganze Zeile oder Spalte entlang. Ein gerader Gang über fünf Felder kostet eine Anfrage, ein Zickzack über fünf Felder kostet fünf. Die Weglänge allein sagt deshalb wenig darüber, wie schwer der Schatz zu finden ist.
+
+### Entscheidung
+
+- Der Server bestimmt für jede erreichbare Zelle einen kürzesten Weg von A1 per Breitensuche.
+- Er bewertet jeden Weg mit drei Maßen:
+  - **Abbiegungen**: Richtungswechsel auf dem Weg. Wer das Labyrinth kennt, braucht mindestens Abbiegungen plus eine Anfrage.
+  - **Abzweigungen**: offene Durchgänge am Weg, die nicht zum Ziel führen. Jede Abzweigung ist eine Gelegenheit, sich zu verlaufen.
+  - **Weglänge**: Schritte auf dem Weg.
+- Die Wertung einer Zelle ist die Summe aus Abbiegungen und Abzweigungen. Bei gleicher Wertung gilt die Zelle mit dem längeren Weg als schwerer.
+- Der Server sortiert die Zellen nach dieser Wertung und lost den Schatz bei `einfach` aus allen Zellen außer A1, bei `standard` aus der schwereren Hälfte und bei `schwer` aus dem schwersten Fünftel.
+
+### Begründung
+
+- Abbiegungen bilden die Spielmechanik ab, denn sie bestimmen die Mindestzahl der Anfragen.
+- Abzweigungen erfassen Irrwege. Eine Zelle direkt neben A1 kann damit schwer sein, wenn der Weg dorthin über viele Sackgassen führt.
+- Die Weglänge bleibt als Entscheider bei Gleichstand. Als dritter Summand würde sie lange gerade Gänge überbewerten.
+- Ein Los aus einem Anteil statt der einen schwersten Zelle hält das Spiel abwechslungsreich.
+- Verworfen wurde die reine Weglänge. Sie bewertet gerade Gänge als schwer, obwohl eine Anfrage reicht.
+- Verworfen wurde die Luftlinie von A1. Sie ignoriert die Mauern vollständig.
+- Verworfen wurde vorerst eine Simulation, bei der der Computer-Sucher jedes Labyrinth mehrfach spielt. Sie hängt vom Sucher ab und kostet bei jedem neuen Match Rechenzeit.
+
+### Konsequenzen
+
+- `server/spiellogik/wegbewertung.ts` enthält `kuerzesteWege`, `wegBewerten` und `schwererZuerst`. Der Computer-Sucher kann diese Funktionen später nutzen.
+- Bei Labyrinthen mit Schleifen gibt es mehrere kürzeste Wege. Die Breitensuche wählt einen davon, die Wertung kann für einen anderen Weg leicht abweichen.
+- Sobald der Computer-Sucher eine Strategie hat, prüft ein Test, ob er bei `schwer` im Schnitt mehr Anfragen braucht als bei `einfach`. Damit wäre die Abstufung belegt.
+- Die Anteile 100, 50 und 20 Prozent sind Startwerte. Spieltests können sie verändern.
 
 ---
 
