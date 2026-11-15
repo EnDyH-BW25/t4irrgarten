@@ -147,6 +147,19 @@ function objektLesen(eingabe: unknown): Record<string, unknown> {
   return eingabe as Record<string, unknown>
 }
 
+// ---------- Aufgeben ----------
+
+/** Der Spieler gibt auf, im Aufbau wie im Spiel. Der Gegner gewinnt. */
+export function aufgeben(match: MatchIntern, nutzerId: string): void {
+  const { gegner } = teilnehmer(match, nutzerId)
+  if (match.status !== 'aufbau' && match.status !== 'laeuft') {
+    throw new ApiFehler(409, 'KONFLIKT', 'Das Match ist schon vorbei.')
+  }
+  // Im Modus computer gibt es immer einen Gegner; ohne Gegner (Duell im Status wartet) folgt Phase 4
+  beenden(match, gegner!.id, 'aufgabe')
+  match.version++
+}
+
 // ---------- 4.3 Anfragen ----------
 
 /** Ergebnis einer Anfrage; die Route ergänzt daraus die AnfrageAntwort */
@@ -220,6 +233,7 @@ function anfrageEintragen(match: MatchIntern, spieler: SpielerDaten, ergebnis: A
 function beenden(match: MatchIntern, siegerId: string, grund: Endegrund): void {
   match.status = 'beendet'
   match.amZug = null
+  match.aufbauEndeAm = null
   match.siegerId = siegerId
   match.endegrund = grund
 }
