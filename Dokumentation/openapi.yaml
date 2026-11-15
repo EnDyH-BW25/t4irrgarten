@@ -979,6 +979,11 @@ components:
           nullable: true
         bekannteKarte:
           $ref: '#/components/schemas/BekannteKarte'
+        gegnerKarte:
+          allOf:
+            - $ref: '#/components/schemas/BekannteKarte'
+          nullable: true
+          description: Suche des Gegners im eigenen Labyrinth. Damit zeichnet der Client die Spur des Gegners auch nach einem Neuladen. Fehlt im Status `wartet`.
         siegerId:
           type: string
           nullable: true
