@@ -39,6 +39,7 @@ Die Übersicht trennt zwei Angaben.
 | ADR-024 | Anmeldezustand im Client und geschützte Routen      | 2           | Akzeptiert | umgesetzt |
 | ADR-025 | Schatzplatzierung nach Schwierigkeit des Wegs       | 3           | Akzeptiert | umgesetzt |
 | ADR-026 | Match-Schicht im Speicher mit eigener Ansicht       | 3           | Akzeptiert | umgesetzt |
+| ADR-027 | Offenes Match und Schwierigkeit im Account          | 3           | Akzeptiert | teilweise |
 
 ---
 
@@ -803,6 +804,40 @@ Phase 3 bringt die ersten Matches gegen den Computer. Die Funktionen in `server/
 - Tests steuern Zeit und Zufall ohne Tricks. Ganze Partien laufen damit vorhersagbar.
 - Ändern zwei Anfragen dasselbe Match fast gleichzeitig, schützt die `anfrageNr` vor doppelt gezählten Anfragen. Deno verarbeitet eine Anfrage ohne `await` dazwischen vollständig, bevor die nächste beginnt.
 - Ein späterer Wechsel zu einer Datenbank betrifft nur `speicher.ts` und die Stellen, die nach einer Änderung speichern müssten.
+
+---
+
+## ADR-027 Offenes Match und Schwierigkeit im Account
+
+### Kontext
+
+Ein Nutzer darf höchstens ein offenes Match haben. Schließt er den Tab, kennt der Client die Id des Matches nicht mehr. Ein neues Match lehnt der Server mit 409 ab. Bis Phase 4 gibt es keine Fristen, das Match bleibt bis zum Neustart offen. Auch danach darf ein Spieler im Aufbau zurückkehren, solange die drei Minuten laufen.
+
+Laut ADR-015 und Klartext ist "Standard" im Dashboard vorgewählt. Wer meist auf "Schwer" spielt, wählt nach jedem Neuladen neu.
+
+### Entscheidung
+
+- Neuer Endpunkt `GET /matches/current`. Er liefert das offene Match des Nutzers oder 404. Das Dashboard fragt ihn beim Laden und bietet "Fortsetzen" und "Aufgeben" an.
+- Der Server merkt sich beim Nutzer die zuletzt gespielte Schwierigkeit. `POST /matches` im Modus `computer` speichert sie, `GET /auth/me` liefert sie im Feld `schwierigkeit`. Das Dashboard wählt diesen Wert vor.
+- Neue Nutzer starten mit `standard`. Konten ohne das Feld erhalten beim Laden `standard`.
+- `NutzerSpeicher.schwierigkeitMerken` schreibt die Datei nur, wenn sich der Wert ändert. Ein abgelehntes Match ändert die Schwierigkeit nicht.
+- `alsNutzer` baut die Sicht des Clients auf einen Nutzer Feld für Feld. Middleware und Login nutzen diese Funktion.
+
+### Begründung
+
+- Nur der Server kennt das offene Match sicher. Eine Id im Speicher des Browsers geht auf einem anderen Gerät oder nach dem Löschen der Daten verloren.
+- In Phase 4 ist `GET /matches/current` der Ort, an dem der Server abgelaufene Fristen nachträgt. Im Modus `computer` ruft nach dem Schließen des Tabs sonst niemand ab.
+- Die Schwierigkeit gehört zum Nutzer und folgt ihm auf jedes Gerät.
+- "Zuletzt gespielt" braucht keinen eigenen Endpunkt und keine Einstellungsseite. ADR-015 bleibt damit gültig.
+- Verworfen wurde der `localStorage` für beide Werte. Er hängt an einem Browser.
+- Verworfen wurde, die Auswahl im Dropdown sofort zu speichern. Jede Änderung ohne Spiel kostete einen Schreibzugriff, und ein bloßes Ausprobieren überschriebe die Vorgabe.
+
+### Konsequenzen
+
+- Der Typ `Nutzer` in `shared/types.ts` und das Schema `User` enthalten `schwierigkeit`.
+- Die Route `/current` steht in Hono vor `/:id`. Sonst gälte "current" als Match-Id.
+- Das Nachtragen der Fristen in `GET /matches/current` und vor der 409 in `POST /matches` folgt in Phase 4. Bis dahin gilt die Umsetzung als teilweise.
+- Ändert der Nutzer das Dropdown ohne zu spielen, zeigt das Dashboard nach dem Neuladen wieder die zuletzt gespielte Schwierigkeit.
 
 ---
 

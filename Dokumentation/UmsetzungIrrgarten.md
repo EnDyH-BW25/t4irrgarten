@@ -38,6 +38,14 @@ Die Reihenfolge folgt den Abhängigkeiten. Jede Phase endet mit einem spielbaren
 - Bereitschafts-Overlay, „Aufgeben“, Endansicht mit beiden Labyrinthen und Anfragezahl
 - Ergebnis speichert der Server selbst
 
+**Merkpunkte aus Phase 3 (Stand 16.11.2026)**
+
+- Zwei Fristen nicht verwechseln. Die Zugfrist misst die Bedenkzeit im eigenen Zug (60 Sekunden). Die Abruffrist misst, wie lange der Browser schweigt (15 Sekunden). Der Client fragt alle 1 bis 2 Sekunden von selbst, auch beim Nachdenken. 15 Sekunden ohne Abruf heißen deshalb Tab zu, Netz weg oder Rechner im Ruhezustand.
+- Offene Frage: Bleibt die Zugfrist bei 60 Sekunden? Als Untergrenze für die Bedenkzeit sind 45 Sekunden im Gespräch. Eine Änderung betrifft Klartext, openapi.yaml und ADR-008 (neue ADR, die ADR-008 ersetzt).
+- Fristen prüft der Server erst beim nächsten Zugriff. Im Modus computer ruft nach dem Schließen des Tabs niemand mehr ab. Die Prüfung gehört deshalb in jeden Zugriff auf ein Match: `GET /matches/{id}`, `GET /matches/current` und `POST /matches` vor der 409-Antwort. Sonst sperrt ein verlassenes Match den Nutzer.
+- `GET /matches/current` existiert seit Phase 3. Der Vertrag verspricht dort schon, abgelaufene Fristen vorher nachzutragen.
+- Im Aufbau gilt nur die 3-Minuten-Frist, nicht die Abruffrist. Wer den Tab schließt, findet über das Dashboard zurück und baut weiter.
+
 # Phase 5: Live-Duell (1 Tag)
 
 - Spielcode erzeugen (5 Zeichen ohne 0, O, 1, I), Warteraum, Ablauf nach 10 Minuten
