@@ -38,6 +38,7 @@ Die Übersicht trennt zwei Angaben.
 | ADR-023 | Sessions im Speicher und Nutzer in JSON-Datei       | 2           | Akzeptiert | umgesetzt |
 | ADR-024 | Anmeldezustand im Client und geschützte Routen      | 2           | Akzeptiert | umgesetzt |
 | ADR-025 | Schatzplatzierung nach Schwierigkeit des Wegs       | 3           | Akzeptiert | umgesetzt |
+| ADR-026 | Match-Schicht im Speicher mit eigener Ansicht       | 3           | Akzeptiert | umgesetzt |
 
 ---
 
@@ -758,6 +759,50 @@ Die erste Umsetzung loste den Schatz bei `schwer` aus den Zellen mit dem längst
 - Bei Labyrinthen mit Schleifen gibt es mehrere kürzeste Wege. Die Breitensuche wählt einen davon, die Wertung kann für einen anderen Weg leicht abweichen.
 - Sobald der Computer-Sucher eine Strategie hat, prüft ein Test, ob er bei `schwer` im Schnitt mehr Anfragen braucht als bei `einfach`. Damit wäre die Abstufung belegt.
 - Die Anteile 100, 50 und 20 Prozent sind Startwerte. Spieltests können sie verändern.
+
+---
+
+## ADR-026 Match-Schicht im Speicher mit eigener Ansicht
+
+### Kontext
+
+Phase 3 bringt die ersten Matches gegen den Computer. Die Funktionen in `server/spiellogik/` sind rein. Sie melden ungültige Eingaben mit `null` oder `false` (ADR-021). Ein Match braucht aber mehr: Spieler, Zustand, Zugrecht, Zähler und Fehlermeldungen nach dem Vertrag. Beide Labyrinthe liegen auf dem Server. Der Client darf das Labyrinth des Gegners erst nach Spielende sehen (ADR-002). Offen war, wo diese Logik liegt, wer die Fehler wirft und wo die Matches gespeichert sind.
+
+### Entscheidung
+
+- Der Ordner `server/match/` enthält die Match-Schicht in vier Dateien:
+  - `typen.ts` mit `MatchIntern` und `SpielerDaten`. Beide Typen verlassen den Server nie.
+  - `ablauf.ts` mit Erstellen, Entwurf speichern, Labyrinth setzen und Anfrage stellen.
+  - `ansicht.ts` mit `ansichtFuer(match, nutzerId, jetzt)`, die den Typ `Match` aus `shared/types.ts` für einen Spieler baut.
+  - `speicher.ts` mit der Klasse `MatchSpeicher` (`anlegen`, `holen`, `offenesMatchVon`).
+- **Fehler:** Die Match-Schicht wirft `ApiFehler` mit Status und Code aus dem Vertrag selbst. `spiellogik/` bleibt bei Rückgaben mit `null` oder `false`.
+- **Speicher:** Matches liegen nur in einer `Map` im Arbeitsspeicher, Schlüssel ist die Match-Id.
+- **Zustand:** `MatchIntern` speichert nur Fakten. Abgeleitete Werte wie `pruefung`, `serverZeit` und die Sicht `ich` und `gegner` berechnet `ansichtFuer` bei jeder Antwort. Zeiten sind intern `Date` und nach außen ISO-Text.
+- **Änderungen:** Die Funktionen in `ablauf.ts` ändern das Match direkt und erhöhen bei jeder Änderung `version`. Der Speicher hält dasselbe Objekt und braucht keine Methode zum Aktualisieren.
+- **Ansicht:** `ansichtFuer` schreibt jedes Feld einzeln. Kopien ganzer interner Objekte mit `...` sind verboten. Das Labyrinth des Gegners erscheint erst im Status `beendet`.
+- **Prüfreihenfolge:** Zuerst Teilnahme (403), dann Form der Eingabe (400), dann Zustand und Zugrecht (409), zuletzt der Inhalt (400 oder 422).
+- Zeit und Zufall kommen als Parameter `jetzt` und `zufall` in die Funktionen. Der Computer hat die feste Id `computer`.
+- In Phase 3 führt das Setzen beider Labyrinthe direkt zum Status `laeuft`. Die Bereitschaftsprüfung nach ADR-008 folgt in Phase 4.
+
+### Begründung
+
+- Die Spiellogik kennt weder HTTP noch Statuscodes. Sie bleibt einfach testbar und lässt sich im Computer-Sucher wiederverwenden.
+- Die Match-Schicht kennt den Zusammenhang einer Anfrage. Nur sie weiß, ob ein `null` aus `anfrageAuswerten` 400 `ZIEL_NICHT_GERADE` bedeutet. Würden erst die Routen die Fehler erzeugen, stünden die Spielregeln verteilt in zwei Schichten.
+- Nur Fakten im internen Zustand verhindern Widersprüche. Ein gespeichertes Feld `pruefung` kann veralten, ein berechnetes nicht.
+- Einzeln geschriebene Felder mit dem Rückgabetyp `Match` lassen TypeScript jedes fehlende oder falsche Feld melden. Ein vergessenes geheimes Feld rutscht dadurch nicht in die Antwort.
+- Die erste Prüfung auf Teilnahme verrät Fremden nichts über den Zustand eines Matches.
+- Ein Match dauert wenige Minuten. Geht es bei einem Neustart verloren, ist der Schaden gering. Die Sessions liegen aus demselben Grund im Speicher (ADR-023).
+- Verworfen wurde eine Datei pro Match. Jede Anfrage würde schreiben, und das Polling nach ADR-012 käme hinzu.
+- Verworfen wurden unveränderliche Matches, bei denen jede Funktion ein neues Objekt liefert. Jede Route müsste das Ergebnis zurück in den Speicher schreiben, und ein vergessener Schritt verlöre die Änderung still.
+
+### Konsequenzen
+
+- Ein Neustart des Servers beendet alle laufenden Matches ohne Ergebnis.
+- Beendete Matches bleiben bis zum Neustart im Speicher. Ergebnisse dauerhaft zu speichern und alte Matches aufzuräumen folgt mit ADR-014.
+- `offenesMatchVon` durchsucht alle Matches. Für die erwartete Zahl an Matches reicht das.
+- Tests steuern Zeit und Zufall ohne Tricks. Ganze Partien laufen damit vorhersagbar.
+- Ändern zwei Anfragen dasselbe Match fast gleichzeitig, schützt die `anfrageNr` vor doppelt gezählten Anfragen. Deno verarbeitet eine Anfrage ohne `await` dazwischen vollständig, bevor die nächste beginnt.
+- Ein späterer Wechsel zu einer Datenbank betrifft nur `speicher.ts` und die Stellen, die nach einer Änderung speichern müssten.
 
 ---
 
