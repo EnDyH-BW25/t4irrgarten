@@ -1,7 +1,16 @@
-import type { LabyrinthEntwurf, Mauer } from '@shared/types.ts'
+import type { BekannteKarte, LabyrinthEntwurf, Mauer } from '@shared/types.ts'
 import { MAX_MAUERN } from '@shared/types.ts'
 import { describe, expect, it } from 'vitest'
-import { mauerUmschalten, schatzSetzen, SPALTEN, zelle, ZEILEN } from '../brett'
+import {
+  geradeZiele,
+  mauerUmschalten,
+  schatzSetzen,
+  SPALTEN,
+  spurFortschreiben,
+  strecke,
+  zelle,
+  ZEILEN,
+} from '../brett'
 
 const LEER: LabyrinthEntwurf = { schatz: null, mauern: [] }
 
@@ -55,5 +64,46 @@ describe('schatzSetzen', () => {
 
   it('lehnt A1 ab, denn dort startet der Gegner', () => {
     expect(schatzSetzen(LEER, 'A1')).toBeNull()
+  })
+})
+
+describe('geradeZiele', () => {
+  it('liefert die 10 Felder in Zeile und Spalte ohne die eigene Position', () => {
+    const ziele = geradeZiele('C4')
+    expect(ziele).toHaveLength(10)
+    expect(ziele).toContain('C1')
+    expect(ziele).toContain('F4')
+    expect(ziele).not.toContain('C4')
+    expect(ziele).not.toContain('D5') // diagonal
+  })
+})
+
+describe('strecke', () => {
+  it('läuft in alle vier Richtungen, beide Enden eingeschlossen', () => {
+    expect(strecke('A1', 'A3')).toEqual(['A1', 'A2', 'A3'])
+    expect(strecke('C2', 'A2')).toEqual(['C2', 'B2', 'A2'])
+    expect(strecke('B5', 'B5')).toEqual(['B5'])
+  })
+})
+
+describe('spurFortschreiben', () => {
+  const START: BekannteKarte = { position: 'A1', besuchteZellen: ['A1'], entdeckteMauern: [] }
+
+  it('trägt die Strecke als besucht ein und versetzt die Figur', () => {
+    const karte = spurFortschreiben(START, {
+      ziel: 'A4',
+      ergebnis: 'ja',
+      position: 'A4',
+      mauer: null,
+    })
+    expect(karte.position).toBe('A4')
+    expect(karte.besuchteZellen).toEqual(['A1', 'A2', 'A3', 'A4'])
+  })
+
+  it('merkt sich eine entdeckte Mauer genau einmal', () => {
+    const nein = { ziel: 'B1', ergebnis: 'nein', position: 'A1', mauer: 'A1_B1' } as const
+    const karte = spurFortschreiben(spurFortschreiben(START, nein), nein)
+    expect(karte.entdeckteMauern).toEqual(['A1_B1'])
+    expect(karte.position).toBe('A1')
   })
 })

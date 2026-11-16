@@ -57,4 +57,18 @@ describe('LabyrinthFeld', () => {
     expect(w.find('[data-test=zelle-A1]').classes()).toContain('bg-orange-300')
     expect(w.find('[data-test=mauer-A1_A2]').classes()).toContain('bg-blue-600')
   })
+
+  it('zeigt eine markierte Mauer nicht mehr rot, sobald sie entfernt ist', () => {
+    const w = feld({ mauern: [], markierteMauern: ['C3_C4'], bearbeitbar: true })
+    expect(w.find('[data-test=mauer-C3_C4]').classes()).not.toContain('bg-red-600')
+  })
+
+  it('macht im Spiel nur die Ziele klickbar, keine Mauern', async () => {
+    const w = feld({ art: 'gegner', ziele: ['A2', 'B1'] })
+    expect(w.find('[data-test=zelle-A2]').attributes('disabled')).toBeUndefined()
+    expect(w.find('[data-test=zelle-C3]').attributes('disabled')).toBeDefined()
+    expect(w.find('[data-test=mauer-A1_A2]').attributes('disabled')).toBeDefined()
+    await w.find('[data-test=zelle-B1]').trigger('click')
+    expect(w.emitted('zelle')).toEqual([['B1']])
+  })
 })

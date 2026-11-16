@@ -1,3 +1,9 @@
+/** Abstand der Abrufe beim Polling (ADR-012: alle 1 bis 2 Sekunden) */
+export const POLL_MS = 1500
+
+/** Pause zwischen zwei Anfragen des Computers, damit man seinen Weg verfolgen kann */
+export const ZUG_PAUSE_MS = 700
+
 /**
  * Restzeit bis zu einem Zeitpunkt des Servers in ganzen Sekunden, nie negativ.
  * versatzMs gleicht eine falsch gehende Uhr im Browser aus: Serverzeit minus Browserzeit.

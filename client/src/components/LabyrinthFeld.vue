@@ -15,9 +15,17 @@ const props = withDefaults(
     schatz?: Zelle | null
     figur?: Zelle | null
     besucht?: Zelle[]
-    bearbeitbar?: boolean
+    bearbeitbar?: boolean // Aufbau: Mauern und Felder klickbar
+    ziele?: Zelle[] // Spiel: nur diese Felder sind als Ziel einer Anfrage klickbar
   }>(),
-  { markierteMauern: () => [], schatz: null, figur: null, besucht: () => [], bearbeitbar: false },
+  {
+    markierteMauern: () => [],
+    schatz: null,
+    figur: null,
+    besucht: () => [],
+    bearbeitbar: false,
+    ziele: () => [],
+  },
 )
 
 const emit = defineEmits<{ mauer: [mauer: Mauer]; zelle: [zelle: Zelle] }>()
@@ -62,6 +70,9 @@ const mauerPlaetze = computed(() => {
 const gesetzt = computed(() => new Set(props.mauern))
 const markiert = computed(() => new Set(props.markierteMauern))
 const besucht = computed(() => new Set(props.besucht))
+const ziele = computed(() => new Set(props.ziele))
+
+const zelleKlickbar = (z: Zelle) => props.bearbeitbar || ziele.value.has(z)
 
 // Farben aus design.md; volle Klassennamen, damit Tailwind sie findet
 const feldFarbe = computed(() => (props.art === 'eigen' ? 'bg-blue-300' : 'bg-orange-300'))
@@ -106,9 +117,13 @@ const lage = (p: Platz) => ({ gridRow: p.zeile, gridColumn: p.spalte })
       type="button"
       :data-test="`zelle-${z.name}`"
       :aria-label="`Feld ${z.name}`"
-      :disabled="!bearbeitbar"
+      :disabled="!zelleKlickbar(z.name)"
       class="relative flex aspect-square items-center justify-center rounded-sm"
-      :class="[feldFarbe, bearbeitbar ? 'cursor-pointer hover:brightness-95' : 'cursor-default']"
+      :class="[
+        feldFarbe,
+        zelleKlickbar(z.name) ? 'cursor-pointer hover:brightness-90' : 'cursor-default',
+        ziele.has(z.name) ? 'ring-2 ring-slate-900/50 ring-inset' : '',
+      ]"
       :style="lage(z)"
       @click="emit('zelle', z.name)"
     >
