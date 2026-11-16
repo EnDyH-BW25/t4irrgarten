@@ -1,6 +1,6 @@
 # Architecture Decision Records Irrgarten
 
-Stand 15.11.2026. Das Format folgt dem Mini-ADR aus dem Skript mit Kontext, Entscheidung, Begründung und Konsequenzen.
+Stand 16.11.2026. Das Format folgt dem Mini-ADR aus dem Skript mit Kontext, Entscheidung, Begründung und Konsequenzen.
 
 Die Datei sammelt alle Entscheidungen des Projekts nach Thema. Eine akzeptierte ADR bleibt unverändert. Ändert sich eine Entscheidung, entsteht eine neue ADR. Die alte erhält den Status "Ersetzt durch ADR-0XX".
 
@@ -14,10 +14,10 @@ Die Übersicht trennt zwei Angaben.
 | Nr      | Titel                                               | Phase       | Status     | Umsetzung |
 | ------- | --------------------------------------------------- | ----------- | ---------- | --------- |
 | ADR-001 | Anwendungsfälle in Klartext vor dem API-Vertrag     | Planung     | Akzeptiert | umgesetzt |
-| ADR-002 | Server als Schiedsrichter                           | Planung     | Akzeptiert | teilweise |
-| ADR-003 | Koordinaten und Mauermodell                         | Planung     | Akzeptiert | teilweise |
+| ADR-002 | Server als Schiedsrichter                           | Planung     | Akzeptiert | umgesetzt |
+| ADR-003 | Koordinaten und Mauermodell                         | Planung     | Akzeptiert | umgesetzt |
 | ADR-004 | Labyrinth-Generierung und Schwierigkeit             | Planung     | Akzeptiert | umgesetzt |
-| ADR-005 | Anfragen entlang von Zeile oder Spalte              | Planung     | Akzeptiert | teilweise |
+| ADR-005 | Anfragen entlang von Zeile oder Spalte              | Planung     | Akzeptiert | umgesetzt |
 | ADR-006 | Aufbauphase unter Kontrolle des Servers             | Planung     | Akzeptiert | teilweise |
 | ADR-007 | Lösbarkeitsprüfung mit Nachbesserung                | Planung     | Akzeptiert | teilweise |
 | ADR-008 | Bereitschaftsprüfung und Abwesenheit                | Planung     | Akzeptiert | teilweise |
@@ -27,7 +27,7 @@ Die Übersicht trennt zwei Angaben.
 | ADR-012 | Aktualisierung per Polling                          | Planung     | Akzeptiert | teilweise |
 | ADR-013 | Kein Gastmodus                                      | Planung     | Akzeptiert | umgesetzt |
 | ADR-014 | Ergebnisse vom Server, Statistik statt Rangliste    | Planung     | Akzeptiert | geplant   |
-| ADR-015 | Dashboard, Schwierigkeit und Einstellungen          | Planung     | Akzeptiert | geplant   |
+| ADR-015 | Dashboard, Schwierigkeit und Einstellungen          | Planung     | Akzeptiert | teilweise |
 | ADR-016 | Technologie-Stack                                   | Einrichtung | Akzeptiert | umgesetzt |
 | ADR-017 | Gemeinsame Typen im Ordner shared                   | 0           | Akzeptiert | umgesetzt |
 | ADR-018 | Einheitliches Fehlerformat im Server                | 0           | Akzeptiert | umgesetzt |
