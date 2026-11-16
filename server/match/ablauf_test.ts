@@ -153,7 +153,7 @@ Deno.test('bereit: vor dem Setzen und nach dem Start 409 KONFLIKT', () => {
 Deno.test('aufgeben: auch im Status startbereit möglich', () => {
   const match = vorbereitetesMatch()
   labyrinthSetzen(match, NUTZER.id, JETZT)
-  aufgeben(match, NUTZER.id)
+  aufgeben(match, NUTZER.id, JETZT)
   assertEquals(match.status, 'beendet')
   assertEquals(match.siegerId, COMPUTER.id)
   assertEquals(match.startFristEndeAm, null)

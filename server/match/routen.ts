@@ -4,6 +4,7 @@ import type { AnfrageAntwort, Schwierigkeit } from '../../shared/types.ts'
 import { anmeldungPruefen, type AuthUmgebung } from '../auth/anmeldung.ts'
 import type { NutzerSpeicher } from '../auth/nutzerSpeicher.ts'
 import type { Sessions } from '../auth/sessions.ts'
+import type { ErgebnisSpeicher } from '../ergebnis/speicher.ts'
 import { ApiFehler } from '../fehler.ts'
 import type { Zufall } from '../spiellogik/generator.ts'
 import {
@@ -16,6 +17,7 @@ import {
   teilnehmer,
 } from './ablauf.ts'
 import { ansichtFuer } from './ansicht.ts'
+import { ergebnisseAus } from './ergebnis.ts'
 import { abrufMerken, fristenPruefen } from './fristpruefung.ts'
 import type { MatchSpeicher } from './speicher.ts'
 import type { MatchIntern } from './typen.ts'
@@ -30,6 +32,7 @@ export function matchRouten(
   sessions: Sessions,
   nutzerSpeicher: NutzerSpeicher,
   matches: MatchSpeicher,
+  ergebnisse: ErgebnisSpeicher,
   { uhr, zufall }: Umgebung,
 ) {
   const routen = new Hono<AuthUmgebung>()
@@ -39,7 +42,7 @@ export function matchRouten(
    * Match zur Id aus dem Pfad oder 404. Jede Route unter /:id holt das Match hier. So prüft der
    * Server bei jedem Zugriff die Fristen, und jeder Zugriff gilt als Lebenszeichen.
    */
-  function matchHolen(c: Context<AuthUmgebung>): MatchIntern {
+  async function matchHolen(c: Context<AuthUmgebung>): Promise<MatchIntern> {
     const match = matches.holen(c.req.param('id') ?? '')
     if (!match) throw new ApiFehler(404, 'NICHT_GEFUNDEN', 'Das Match gibt es nicht.')
     const nutzerId = c.get('nutzer').id
@@ -49,26 +52,35 @@ export function matchRouten(
     // Erst Fristen, dann Lebenszeichen. Sonst tilgt die Rückkehr eine abgelaufene Abruffrist.
     fristenPruefen(match, jetzt, zufall)
     abrufMerken(match, nutzerId, jetzt)
+    // Hat eine Frist das Match beendet, steht das Ergebnis auch dann fest, wenn die Route danach 409 meldet
+    await ergebnisseSichern(match)
     return match
   }
 
   /** Offenes Match des Nutzers nach dem Nachtragen der Fristen. Ein abgelaufenes zählt nicht. */
-  function offenesMatch(nutzerId: string): MatchIntern | null {
+  async function offenesMatch(nutzerId: string): Promise<MatchIntern | null> {
     const match = matches.offenesMatchVon(nutzerId)
     if (!match) return null
     fristenPruefen(match, uhr(), zufall)
+    await ergebnisseSichern(match)
     return matches.offenesMatchVon(nutzerId)
   }
 
-  /** Antwortet mit der Sicht des angemeldeten Spielers */
-  function ansicht(c: Context<AuthUmgebung>, match: MatchIntern, status: 200 | 201 = 200) {
+  /** Ist das Match beendet, trägt der Server die Ergebnisse ein. Ein zweiter Aufruf ändert nichts. */
+  async function ergebnisseSichern(match: MatchIntern): Promise<void> {
+    if (match.status === 'beendet') await ergebnisse.eintragen(ergebnisseAus(match))
+  }
+
+  /** Antwortet mit der Sicht des angemeldeten Spielers. Endete das Match gerade, erst das Ergebnis. */
+  async function ansicht(c: Context<AuthUmgebung>, match: MatchIntern, status: 200 | 201 = 200) {
+    await ergebnisseSichern(match)
     return c.json(ansichtFuer(match, c.get('nutzer').id, uhr()), status)
   }
 
   routen.post('/', async (c) => {
     const nutzer = c.get('nutzer')
     const schwierigkeit = matchAnlegenLesen(await jsonLesen(c))
-    if (offenesMatch(nutzer.id)) {
+    if (await offenesMatch(nutzer.id)) {
       throw new ApiFehler(409, 'KONFLIKT', 'Du spielst bereits ein Match.')
     }
     const match = computerMatchErstellen(nutzer, schwierigkeit, uhr(), zufall)
@@ -79,39 +91,39 @@ export function matchRouten(
 
   // Steht vor /:id, sonst hielte Hono "current" für eine Match-Id
   // Kein Lebenszeichen: Das Dashboard schaut nur nach, der Spieler ist nicht im Spiel
-  routen.get('/current', (c) => {
-    const match = offenesMatch(c.get('nutzer').id)
+  routen.get('/current', async (c) => {
+    const match = await offenesMatch(c.get('nutzer').id)
     if (!match) throw new ApiFehler(404, 'NICHT_GEFUNDEN', 'Du hast kein offenes Match.')
     return ansicht(c, match)
   })
 
-  routen.get('/:id', (c) => {
+  routen.get('/:id', async (c) => {
     // matchHolen prüft die Teilnahme zuerst: Fremde erkennen nicht einmal an der 304, ob sich etwas tut
-    const match = matchHolen(c)
+    const match = await matchHolen(c)
     if (sinceLesen(c.req.query('since')) === match.version) return c.body(null, 304)
     return ansicht(c, match)
   })
 
   routen.put('/:id/labyrinth', async (c) => {
-    const match = matchHolen(c)
+    const match = await matchHolen(c)
     entwurfSpeichern(match, c.get('nutzer').id, await jsonLesen(c))
     return ansicht(c, match)
   })
 
-  routen.post('/:id/labyrinth/place', (c) => {
-    const match = matchHolen(c)
+  routen.post('/:id/labyrinth/place', async (c) => {
+    const match = await matchHolen(c)
     labyrinthSetzen(match, c.get('nutzer').id, uhr())
     return ansicht(c, match)
   })
 
-  routen.post('/:id/ready', (c) => {
-    const match = matchHolen(c)
+  routen.post('/:id/ready', async (c) => {
+    const match = await matchHolen(c)
     bereitBestaetigen(match, c.get('nutzer').id, uhr(), zufall)
     return ansicht(c, match)
   })
 
   routen.post('/:id/queries', async (c) => {
-    const match = matchHolen(c)
+    const match = await matchHolen(c)
     const nutzerId = c.get('nutzer').id
     const { ergebnis, computerAnfragen } = anfrageStellen(
       match,
@@ -120,6 +132,7 @@ export function matchRouten(
       uhr(),
       zufall,
     )
+    await ergebnisseSichern(match)
     const antwort: AnfrageAntwort = {
       ...ergebnis,
       computerAnfragen,
@@ -128,9 +141,9 @@ export function matchRouten(
     return c.json(antwort)
   })
 
-  routen.post('/:id/resign', (c) => {
-    const match = matchHolen(c)
-    aufgeben(match, c.get('nutzer').id)
+  routen.post('/:id/resign', async (c) => {
+    const match = await matchHolen(c)
+    aufgeben(match, c.get('nutzer').id, uhr())
     return ansicht(c, match)
   })
 

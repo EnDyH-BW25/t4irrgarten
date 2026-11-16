@@ -50,6 +50,7 @@ export function computerMatchErstellen(
     zugEndeAm: null,
     siegerId: null,
     endegrund: null,
+    beendetAm: null,
   }
 }
 
@@ -157,7 +158,9 @@ function spielStarten(match: MatchIntern, jetzt: Date, zufall: Zufall): void {
   for (const s of match.spieler) s.letzterAbrufAm = jetzt
   // Auslosung: jeder Spieler mit gleicher Chance
   match.amZug = match.spieler[Math.floor(zufall() * match.spieler.length)].id
-  if (match.spieler.find((s) => s.id === match.amZug)!.istComputer) computerSpielt(match, zufall)
+  if (match.spieler.find((s) => s.id === match.amZug)!.istComputer) {
+    computerSpielt(match, jetzt, zufall)
+  }
   zugFristStarten(match, jetzt)
 }
 
@@ -198,13 +201,13 @@ function objektLesen(eingabe: unknown): Record<string, unknown> {
 // ---------- Aufgeben ----------
 
 /** Der Spieler gibt auf, im Aufbau wie im Spiel. Der Gegner gewinnt. */
-export function aufgeben(match: MatchIntern, nutzerId: string): void {
+export function aufgeben(match: MatchIntern, nutzerId: string, jetzt: Date): void {
   const { gegner } = teilnehmer(match, nutzerId)
   if (!['aufbau', 'startbereit', 'laeuft'].includes(match.status)) {
     throw new ApiFehler(409, 'KONFLIKT', 'Das Match ist schon vorbei.')
   }
   // Im Modus computer gibt es immer einen Gegner; ohne Gegner (Duell im Status wartet) folgt Phase 4
-  beenden(match, gegner!.id, 'aufgabe')
+  beenden(match, gegner!.id, 'aufgabe', jetzt)
   match.version++
 }
 
@@ -251,11 +254,11 @@ export function anfrageStellen(
   let computerAnfragen: AnfrageErgebnis[] | null = match.modus === 'computer' ? [] : null
 
   if (ergebnis.ergebnis === 'schatzGefunden') {
-    beenden(match, ich.id, 'schatz')
+    beenden(match, ich.id, 'schatz', jetzt)
   } else if (ergebnis.ergebnis !== 'ja') {
     // nurBis oder nein: Der Zug wechselt
     match.amZug = gegner!.id
-    if (gegner!.istComputer) computerAnfragen = computerSpielt(match, zufall)
+    if (gegner!.istComputer) computerAnfragen = computerSpielt(match, jetzt, zufall)
   }
 
   zugFristStarten(match, jetzt)
@@ -264,7 +267,7 @@ export function anfrageStellen(
 }
 
 /** Spielt den ganzen Zug des Computers und gibt den Zug danach zurück */
-function computerSpielt(match: MatchIntern, zufall: Zufall): AnfrageErgebnis[] {
+function computerSpielt(match: MatchIntern, jetzt: Date, zufall: Zufall): AnfrageErgebnis[] {
   const computer = match.spieler.find((s) => s.istComputer)!
   const mensch = match.spieler.find((s) => !s.istComputer)!
 
@@ -272,7 +275,7 @@ function computerSpielt(match: MatchIntern, zufall: Zufall): AnfrageErgebnis[] {
   for (const ergebnis of zug.anfragen) anfrageEintragen(match, computer, ergebnis)
 
   const letzte = zug.anfragen[zug.anfragen.length - 1]
-  if (letzte.ergebnis === 'schatzGefunden') beenden(match, computer.id, 'schatz')
+  if (letzte.ergebnis === 'schatzGefunden') beenden(match, computer.id, 'schatz', jetzt)
   else match.amZug = mensch.id
   return zug.anfragen
 }
@@ -283,12 +286,13 @@ function anfrageEintragen(match: MatchIntern, spieler: SpielerDaten, ergebnis: A
   match.anfrageNr++
 }
 
-/** Beendet das Match mit Sieger. Alle Fristen enden mit. */
-export function beenden(match: MatchIntern, siegerId: string, grund: Endegrund): void {
+/** Beendet das Match mit Sieger. Alle Fristen enden mit. `am` ist der Zeitpunkt des Endes. */
+export function beenden(match: MatchIntern, siegerId: string, grund: Endegrund, am: Date): void {
   match.status = 'beendet'
   fristenLoeschen(match)
   match.siegerId = siegerId
   match.endegrund = grund
+  match.beendetAm = am
 }
 
 /** Bricht das Match ohne Sieger und ohne Ergebnis ab */

@@ -36,4 +36,5 @@ export type MatchIntern = {
   zugEndeAm: Date | null // nur im Status laeuft gesetzt, gilt für den Spieler in amZug
   siegerId: string | null // erst nach Spielende gesetzt
   endegrund: Endegrund | null // erst nach Spielende gesetzt
+  beendetAm: Date | null // Zeitpunkt des Spielendes; bei einer Frist deren Ende, nicht der Abruf
 }

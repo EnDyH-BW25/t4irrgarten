@@ -79,11 +79,12 @@ function automatischSetzen(spieler: SpielerDaten, zufall: Zufall): void {
 
 /** Bereitschaft: Wer bestätigt hat, gewinnt. Hat keiner bestätigt, bricht das Match ab. */
 function startfristPruefen(match: MatchIntern, jetzt: Date): void {
-  if (jetzt.getTime() < match.startFristEndeAm!.getTime()) return
+  const ende = match.startFristEndeAm!
+  if (jetzt.getTime() < ende.getTime()) return
 
   const bereit = match.spieler.filter((s) => s.startBestaetigt)
   // Haben alle bestätigt, liefe das Spiel schon. Es bleiben also ein oder kein Spieler.
-  if (bereit.length === 1) beenden(match, bereit[0].id, 'startfrist')
+  if (bereit.length === 1) beenden(match, bereit[0].id, 'startfrist', ende)
   else abbrechen(match)
   match.version++
 }
@@ -108,6 +109,6 @@ function spielfristenPruefen(match: MatchIntern, jetzt: Date): void {
   if (!erster) return
 
   const sieger = match.spieler.find((s) => s.id !== erster.verliererId)!
-  beenden(match, sieger.id, erster.grund)
+  beenden(match, sieger.id, erster.grund, new Date(erster.am))
   match.version++
 }

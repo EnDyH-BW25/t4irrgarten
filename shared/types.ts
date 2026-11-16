@@ -157,6 +157,25 @@ export type AnfrageAntwort = AnfrageErgebnis & {
   match: Match
 }
 
+/**
+ * Ein Eintrag in der Ergebnisliste eines Nutzers (Result in der openapi.yaml). Der Server legt ihn
+ * selbst an. minAnfragen und effizienz fehlen noch, sie gehören zur offenen Punktevergabe.
+ */
+export type Ergebnis = {
+  id: string
+  matchId: string
+  competitionId: string | null // nur bei Matches eines Turniers gesetzt
+  runde: number | null // Runde im Turnier, sonst null
+  platzierung: number | null // Endplatz im Turnier, sonst null
+  modus: Modus
+  schwierigkeit: Schwierigkeit | null // nur im Modus computer gesetzt
+  gegner: string // Name des Gegners, beim Computer "Computer"
+  ausgang: 'sieg' | 'niederlage'
+  endegrund: Endegrund
+  anfragen: number // Anfragen des Nutzers in diesem Match
+  beendetAm: string
+}
+
 /** Maximale Anzahl an Mauern */
 export const MAX_MAUERN = 30
 

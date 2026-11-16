@@ -2,6 +2,7 @@ import { assert, assertEquals } from '@std/assert'
 import type { AnfrageAntwort, Labyrinth, Match } from '../../shared/types.ts'
 import { NutzerSpeicher } from '../auth/nutzerSpeicher.ts'
 import { Sessions } from '../auth/sessions.ts'
+import { ErgebnisSpeicher } from '../ergebnis/speicher.ts'
 import { appErstellen } from '../main.ts'
 import { mitTempOrdner } from '../testHilfen.ts'
 import { MatchSpeicher } from './speicher.ts'
@@ -19,9 +20,11 @@ const COMPUTER_MATCH = { modus: 'computer', schwierigkeit: 'standard' }
  */
 async function aufbauen(pfad: string) {
   const matches = new MatchSpeicher()
+  const ergebnisse = await ErgebnisSpeicher.laden(pfad.replace('nutzer.json', 'ergebnisse.json'))
   let zeit = JETZT
   const app = appErstellen(new Sessions(), await NutzerSpeicher.laden(pfad), {
     matches,
+    ergebnisse,
     uhr: () => zeit,
     zufall: ZUERST,
   })
@@ -71,7 +74,7 @@ async function aufbauen(pfad: string) {
     return await (await app.request('/api/auth/me', { headers: { Cookie: `sid=${sid}` } })).json()
   }
 
-  return { matches, anmelden, senden, ich, neuesMatch, laufendesMatch, vorspulen }
+  return { matches, ergebnisse, anmelden, senden, ich, neuesMatch, laufendesMatch, vorspulen }
 }
 
 /** Prüft Status und Fehlercode einer Fehlerantwort */
@@ -438,4 +441,50 @@ Deno.test('fristen: ein fremder Abruf löst keine Frist aus', () =>
     vorspulen(20_000)
     await fehler(await senden(fremd, 'GET', `/${id}`), 403, 'VERBOTEN')
     assertEquals(matches.holen(id)!.status, 'laeuft')
+  }))
+
+// ---------- Ergebnisse ----------
+
+/** Id des angemeldeten Nutzers über /auth/me */
+async function nutzerId(ich: (sid: string) => Promise<{ id: string }>, sid: string) {
+  return (await ich(sid)).id
+}
+
+Deno.test('ergebnisse: Schatz gefunden legt einen Sieg an', () =>
+  mitTempOrdner(async (pfad) => {
+    const { anmelden, senden, laufendesMatch, ergebnisse, ich } = await aufbauen(pfad)
+    const sid = await anmelden('nudl')
+    const id = await laufendesMatch(sid)
+    await senden(sid, 'POST', `/${id}/queries`, { anfrageNr: 1, ziel: 'A4' })
+
+    const [eintrag] = ergebnisse.vonNutzer(await nutzerId(ich, sid))
+    assertEquals([eintrag.matchId, eintrag.ausgang, eintrag.endegrund], [id, 'sieg', 'schatz'])
+    assertEquals(eintrag.anfragen, 1)
+  }))
+
+Deno.test('ergebnisse: Ende per Frist zählt einmal, auch bei mehreren Abrufen', () =>
+  mitTempOrdner(async (pfad) => {
+    const { anmelden, senden, laufendesMatch, vorspulen, ergebnisse, ich } = await aufbauen(pfad)
+    const sid = await anmelden('nudl')
+    const id = await laufendesMatch(sid)
+
+    vorspulen(10 * 60_000)
+    await senden(sid, 'GET', '/current')
+    await senden(sid, 'GET', `/${id}`)
+    await senden(sid, 'GET', `/${id}`)
+
+    const liste = ergebnisse.vonNutzer(await nutzerId(ich, sid))
+    assertEquals(liste.length, 1)
+    assertEquals([liste[0].ausgang, liste[0].endegrund], ['niederlage', 'abwesenheit'])
+  }))
+
+Deno.test('ergebnisse: Aufgeben im Aufbau zählt als Niederlage', () =>
+  mitTempOrdner(async (pfad) => {
+    const { anmelden, senden, neuesMatch, ergebnisse, ich } = await aufbauen(pfad)
+    const sid = await anmelden('nudl')
+    const id = await neuesMatch(sid)
+    await senden(sid, 'POST', `/${id}/resign`)
+
+    const [eintrag] = ergebnisse.vonNutzer(await nutzerId(ich, sid))
+    assertEquals([eintrag.ausgang, eintrag.endegrund], ['niederlage', 'aufgabe'])
   }))
