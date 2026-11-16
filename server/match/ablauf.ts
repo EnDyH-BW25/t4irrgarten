@@ -1,3 +1,4 @@
+import { WIEDERGABE_PAUSE_MS } from '../../shared/types.ts'
 import type {
   AnfrageErgebnis,
   Endegrund,
@@ -261,7 +262,9 @@ export function anfrageStellen(
     if (gegner!.istComputer) computerAnfragen = computerSpielt(match, jetzt, zufall)
   }
 
-  zugFristStarten(match, jetzt)
+  // Die Bedenkzeit beginnt erst, wenn der Client den Zug des Computers abgespielt hat
+  const wiedergabeMs = (computerAnfragen?.length ?? 0) * WIEDERGABE_PAUSE_MS
+  zugFristStarten(match, new Date(jetzt.getTime() + wiedergabeMs))
   match.version++
   return { ergebnis, computerAnfragen }
 }

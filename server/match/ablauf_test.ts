@@ -1,5 +1,5 @@
 import { assert, assertEquals, assertThrows } from '@std/assert'
-import type { FehlerCode, Labyrinth } from '../../shared/types.ts'
+import { type FehlerCode, type Labyrinth, WIEDERGABE_PAUSE_MS } from '../../shared/types.ts'
 import { ApiFehler } from '../fehler.ts'
 import { loesbarkeitPruefen } from '../spiellogik/regeln.ts'
 import { zielWaehlen } from '../spiellogik/sucher.ts'
@@ -210,14 +210,27 @@ Deno.test('anfrage: ja über ein Feld, der Spieler bleibt am Zug', () => {
   assertEquals(match.spieler[0].karte.position, 'A2')
 })
 
-Deno.test('anfrage: jede Anfrage startet die Zugfrist neu', () => {
+Deno.test('anfrage: ja startet die Zugfrist neu', () => {
   const match = laufendesMatch()
   anfrageStellen(match, NUTZER.id, { anfrageNr: 1, ziel: 'A2' }, SPAETER, ZUERST)
-  assertEquals(match.zugEndeAm!.getTime(), SPAETER.getTime() + ZUG_FRIST_MS)
-  // nein: Zugwechsel, der Computer spielt sofort, die neue Frist gilt wieder dem Menschen
-  anfrageStellen(match, NUTZER.id, { anfrageNr: 2, ziel: 'F2' }, JETZT, ZUERST)
   assertEquals(match.amZug, NUTZER.id)
-  assertEquals(match.zugEndeAm!.getTime(), JETZT.getTime() + ZUG_FRIST_MS)
+  assertEquals(match.zugEndeAm!.getTime(), SPAETER.getTime() + ZUG_FRIST_MS)
+})
+
+Deno.test('anfrage: nach dem Zug des Computers beginnt die Frist erst nach der Wiedergabe', () => {
+  const match = laufendesMatch()
+  // F1 stößt an A1_B1: nein, der Computer spielt sofort, danach bin ich wieder dran
+  const { computerAnfragen } = anfrageStellen(
+    match,
+    NUTZER.id,
+    { anfrageNr: 1, ziel: 'F1' },
+    SPAETER,
+    ZUERST,
+  )
+  assertEquals(match.amZug, NUTZER.id)
+  const wiedergabe = computerAnfragen!.length * WIEDERGABE_PAUSE_MS
+  assertEquals(wiedergabe, 700) // eine Anfrage des Computers
+  assertEquals(match.zugEndeAm!.getTime(), SPAETER.getTime() + wiedergabe + ZUG_FRIST_MS)
 })
 
 Deno.test('anfrage: nein, danach spielt der Computer seinen Zug', () => {

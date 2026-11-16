@@ -176,6 +176,12 @@ export type Ergebnis = {
   beendetAm: string
 }
 
+/**
+ * Pause zwischen zwei Anfragen des Computers bei der Wiedergabe im Client. Der Server verlängert
+ * um diese Zeit pro Anfrage die Zugfrist danach, damit die Wiedergabe keine Bedenkzeit kostet.
+ */
+export const WIEDERGABE_PAUSE_MS = 700
+
 /** Maximale Anzahl an Mauern */
 export const MAX_MAUERN = 30
 
