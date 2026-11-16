@@ -10,12 +10,12 @@ import type {
   Match,
   Zelle,
 } from '@shared/types.ts'
-import { MAX_MAUERN } from '@shared/types.ts'
+import { MAX_MAUERN, WIEDERGABE_PAUSE_MS } from '@shared/types.ts'
 import { abfragen, ApiFehler, get, post, put } from '@/api'
 import { antwortText, ENDEGRUND_TEXT, SCHWIERIGKEITEN, STATUS_TEXT } from '@/anzeige'
 import { nutzer } from '@/anmeldung'
 import { geradeZiele, mauerUmschalten, schatzSetzen, spurFortschreiben } from '@/brett'
-import { POLL_MS, restSekunden, zeitText, ZUG_PAUSE_MS } from '@/countdown'
+import { POLL_MS, restSekunden, zeitText } from '@/countdown'
 import { aufgeben } from '@/matches'
 import LabyrinthFeld from '@/components/LabyrinthFeld.vue'
 
@@ -43,6 +43,12 @@ let letzteSpeicherung: Promise<void> = Promise.resolve()
 
 const setzt = ref(false)
 const setzFehler = ref<string | null>(null)
+
+// ---------- Bereitschaft ----------
+
+/** "Spiel starten" ist unterwegs */
+const startet = ref(false)
+const startFehler = ref<string | null>(null)
 
 // ---------- Spiel ----------
 
@@ -79,11 +85,38 @@ const ichBinDran = computed(
 )
 const restMauern = computed(() => MAX_MAUERN - entwurf.value.mauern.length)
 
-/** Restzeit des Aufbaus in Sekunden oder null, wenn keine Frist läuft */
-const restSek = computed(() => {
-  const ende = match.value?.aufbauEndeAm
-  return ende ? restSekunden(ende, versatzMs.value, jetzt.value) : null
+/**
+ * Die Frist, die gerade zählt: Aufbau oder Nachbesserung, Bereitschaft oder Zug.
+ * rotAb nennt die Sekunden, ab denen der Countdown rot wird.
+ */
+const frist = computed<{ ende: string; titel: string; rotAb: number } | null>(() => {
+  const m = match.value
+  if (!m) return null
+  if (m.status === 'aufbau') {
+    if (m.ich.nachbesserungEndeAm) {
+      return { ende: m.ich.nachbesserungEndeAm, titel: 'Restzeit zum Nachbessern', rotAb: 30 }
+    }
+    if (m.gegner?.nachbesserungEndeAm) {
+      return { ende: m.gegner.nachbesserungEndeAm, titel: 'Der Gegner bessert nach', rotAb: 0 }
+    }
+    return m.aufbauEndeAm
+      ? { ende: m.aufbauEndeAm, titel: 'Restzeit für den Aufbau', rotAb: 30 }
+      : null
+  }
+  if (m.status === 'startbereit' && m.startFristEndeAm) {
+    return { ende: m.startFristEndeAm, titel: 'Zeit für die Bereitschaft', rotAb: 10 }
+  }
+  if (m.status === 'laeuft' && m.zugEndeAm) {
+    const titel = m.amZug === meineId.value ? 'Deine Bedenkzeit' : 'Bedenkzeit des Gegners'
+    return { ende: m.zugEndeAm, titel, rotAb: 10 }
+  }
+  return null
 })
+
+/** Restzeit der laufenden Frist in Sekunden oder null, wenn keine läuft */
+const restSek = computed(() =>
+  frist.value ? restSekunden(frist.value.ende, versatzMs.value, jetzt.value) : null,
+)
 
 /** Felder im Gegner-Labyrinth, die ich gerade anfragen darf */
 const ziele = computed<Zelle[]>(() =>
@@ -109,6 +142,10 @@ const zugText = computed(() => {
 function uebernehmen(m: Match) {
   match.value = m
   versatzMs.value = Date.parse(m.serverZeit) - Date.now()
+  // Nach dem Setzen gilt das Labyrinth des Servers. Hat er bei Fristende einen Schatz gelegt
+  // oder Mauern geöffnet, zeigt das Feld es so. Im Aufbau bleibt der eigene Entwurf führend.
+  const bearbeitbar = m.status === 'aufbau' && !m.ich.labyrinthGesetzt
+  if (!bearbeitbar && m.meinLabyrinth) entwurf.value = m.meinLabyrinth
 }
 
 function fehlertext(e: unknown) {
@@ -136,8 +173,10 @@ async function laden() {
 async function abfrageTick() {
   if (!match.value || fragtAb) return
   if (vorbei.value) return clearInterval(polling)
-  // Eigene Änderungen sind unterwegs: Ihre Antwort ist neuer als jeder Abruf
-  if (offeneSpeicherungen > 0 || fragt.value || abspielKarte.value) return
+  // Eigene Änderungen sind unterwegs: Ihre Antwort ist neuer als jeder Abruf.
+  // Während der Wiedergabe des Computerzugs fragt der Client weiter ab. Jeder Abruf ist ein
+  // Lebenszeichen, und eine lange Wiedergabe dauert mehr als die 15 Sekunden der Abruffrist.
+  if (offeneSpeicherungen > 0 || fragt.value) return
   fragtAb = true
   try {
     const neu = await abfragen<Match>(`/matches/${props.id}`, match.value.version)
@@ -201,19 +240,37 @@ async function setzen() {
       await letzteSpeicherung
       if (speicherFehler.value) return
     }
-    const gestartet = await post<Match>(`/matches/${props.id}/labyrinth/place`)
-    uebernehmen(gestartet)
-    // Hat der Computer die Auslosung gewonnen, ist sein erster Zug schon gespielt
-    if (gestartet.status !== 'aufbau' && gestartet.anfrageNr > 1) {
-      verlauf.value.unshift('Der Computer hat die Auslosung gewonnen und ist schon gezogen.')
-    } else if (gestartet.status === 'laeuft') {
-      verlauf.value.unshift('Du hast die Auslosung gewonnen und beginnst.')
-    }
+    // Danach ist das Match startbereit, das Overlay fragt nach der Bereitschaft
+    uebernehmen(await post<Match>(`/matches/${props.id}/labyrinth/place`))
   } catch (e) {
     // 422: Schatz fehlt oder ist nicht erreichbar. Die Mauern markiert schon die Prüfung.
     setzFehler.value = fehlertext(e)
   } finally {
     setzt.value = false
+  }
+}
+
+// ---------- Bereitschaft ----------
+
+/** "Spiel starten" im Overlay. Sind alle bereit, lost der Server aus, wer beginnt. */
+async function starten() {
+  startet.value = true
+  startFehler.value = null
+  try {
+    const gestartet = await post<Match>(`/matches/${props.id}/ready`)
+    uebernehmen(gestartet)
+    // Hat der Computer die Auslosung gewonnen, ist sein erster Zug schon gespielt
+    if (gestartet.anfrageNr > 1) {
+      verlauf.value.unshift('Der Computer hat die Auslosung gewonnen und ist schon gezogen.')
+    } else if (gestartet.status === 'laeuft') {
+      verlauf.value.unshift('Du hast die Auslosung gewonnen und beginnst.')
+    }
+  } catch (e) {
+    startFehler.value = fehlertext(e)
+    // 409: Die Startfrist ist schon abgelaufen; der neue Stand zeigt das Ergebnis
+    if (e instanceof ApiFehler && e.status === 409) await laden()
+  } finally {
+    startet.value = false
   }
 }
 
@@ -225,6 +282,7 @@ async function anfragen(ziel: Zelle) {
   fragt.value = true
   hinweis.value = null
   const vorher = match.value.gegnerKarte
+  let computerZug: AnfrageErgebnis[] = []
   try {
     const antwort = await post<AnfrageAntwort>(`/matches/${props.id}/queries`, {
       anfrageNr: match.value.anfrageNr,
@@ -232,9 +290,7 @@ async function anfragen(ziel: Zelle) {
     })
     verlauf.value.unshift(`Du: ${ziel}, ${antwortText(antwort)}`)
     uebernehmen(antwort.match)
-    if (antwort.computerAnfragen?.length && vorher) {
-      await computerAbspielen(vorher, antwort.computerAnfragen)
-    }
+    computerZug = antwort.computerAnfragen ?? []
   } catch (e) {
     hinweis.value = fehlertext(e)
     // 409: Der Stand auf dem Server ist ein anderer, zum Beispiel nach einem Doppelklick
@@ -242,6 +298,8 @@ async function anfragen(ziel: Zelle) {
   } finally {
     fragt.value = false
   }
+  // Erst nach der Anfrage abspielen: Solange fragt gilt, ruft das Polling nicht ab
+  if (computerZug.length && vorher) await computerAbspielen(vorher, computerZug)
 }
 
 /** Spielt den Zug des Computers Anfrage für Anfrage auf meinem Feld ab */
@@ -249,7 +307,7 @@ async function computerAbspielen(start: BekannteKarte, anfragenListe: AnfrageErg
   let karte = start
   abspielKarte.value = karte
   for (const a of anfragenListe) {
-    await warten(ZUG_PAUSE_MS)
+    await warten(WIEDERGABE_PAUSE_MS)
     karte = spurFortschreiben(karte, a)
     abspielKarte.value = karte
     verlauf.value.unshift(`Computer: ${a.ziel}, ${antwortText(a)}`)
@@ -287,12 +345,13 @@ onUnmounted(() => {
 
     <template v-else-if="match">
       <div class="flex flex-wrap items-baseline justify-between gap-2">
+        <!-- In startbereit zeigt das Overlay die Frist -->
         <p
-          v-if="restSek !== null && match.status === 'aufbau'"
+          v-if="frist && restSek !== null && match.status !== 'startbereit'"
           data-test="countdown"
           class="font-titel text-3xl tabular-nums"
-          :class="restSek <= 30 ? 'text-red-600' : ''"
-          title="Restzeit für den Aufbau"
+          :class="restSek <= frist.rotAb ? 'text-red-600' : ''"
+          :title="frist.titel"
         >
           {{ zeitText(restSek) }}
         </p>
@@ -305,9 +364,56 @@ onUnmounted(() => {
         </p>
       </div>
 
+      <!-- Bereitschaft (ADR-008): Overlay über der ganzen Seite -->
+      <div
+        v-if="match.status === 'startbereit'"
+        data-test="bereitschaft"
+        class="fixed inset-0 z-10 flex items-center justify-center bg-slate-900/60 p-4"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="bereitschaft-titel"
+      >
+        <div class="w-full max-w-sm space-y-4 rounded-lg bg-white p-6 text-center shadow-lg">
+          <p id="bereitschaft-titel" class="font-titel text-2xl">Bist du bereit zu spielen?</p>
+          <p
+            v-if="restSek !== null"
+            data-test="bereit-countdown"
+            class="font-titel text-4xl tabular-nums"
+            :class="restSek <= 10 ? 'text-red-600' : ''"
+          >
+            {{ zeitText(restSek) }}
+          </p>
+          <button
+            v-if="!match.ich.startBestaetigt"
+            type="button"
+            data-test="starten"
+            class="w-full rounded bg-blue-700 px-3 py-2 text-white disabled:opacity-50"
+            :disabled="startet"
+            @click="starten"
+          >
+            {{ startet ? 'Bitte warten ...' : 'Spiel starten' }}
+          </button>
+          <p v-else data-test="warte-gegner" class="text-slate-600">Warte auf den Gegner ...</p>
+          <p v-if="startFehler" data-test="start-fehler" role="alert" class="text-sm text-red-600">
+            {{ startFehler }}
+          </p>
+        </div>
+      </div>
+
+      <!-- Abgebrochen: keiner war bereit, das Spiel zählt nicht -->
+      <div
+        v-if="match.status === 'abgebrochen'"
+        data-test="ergebnis"
+        class="rounded-lg bg-slate-200 p-4 text-center text-slate-800"
+      >
+        <p class="font-titel text-2xl">Abgebrochen</p>
+        <p class="text-sm">Keiner war rechtzeitig bereit. Das Spiel zählt nicht.</p>
+        <RouterLink to="/dashboard" class="mt-2 inline-block underline">Zum Dashboard</RouterLink>
+      </div>
+
       <!-- Spielende -->
       <div
-        v-if="vorbei"
+        v-else-if="vorbei"
         data-test="ergebnis"
         class="rounded-lg p-4 text-center"
         :class="
@@ -339,6 +445,15 @@ onUnmounted(() => {
             @zelle="zelleKlick"
           />
           <template v-if="imAufbau">
+            <p
+              v-if="match.ich.nachbesserungEndeAm"
+              data-test="nachbesserung"
+              role="alert"
+              class="rounded bg-orange-100 px-3 py-2 text-sm text-orange-900"
+            >
+              Die Aufbauzeit ist vorbei, dein Schatz ist aber nicht erreichbar. Du hast eine Minute
+              zum Nachbessern. Danach öffnet der Server zufällig rot markierte Mauern.
+            </p>
             <p data-test="rest-mauern" class="text-sm">
               Noch {{ restMauern }} von {{ MAX_MAUERN }} Mauern
             </p>
@@ -384,6 +499,9 @@ onUnmounted(() => {
             class="text-sm text-slate-600"
           >
             Dein Irrgarten steht.
+            <template v-if="match.gegner?.nachbesserungEndeAm">
+              Der Gegner überarbeitet seinen Irrgarten.
+            </template>
           </p>
           <p v-if="hinweis" data-test="hinweis" class="text-sm text-orange-700">{{ hinweis }}</p>
           <p

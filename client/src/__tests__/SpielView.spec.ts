@@ -217,7 +217,7 @@ describe('SpielView: Countdown, Prüfung und Setzen', () => {
     expect(rot.text()).toContain('rot markierten Mauern')
   })
 
-  it('wartet beim Setzen auf die letzte Speicherung und startet dann das Spiel', async () => {
+  it('wartet beim Setzen auf die letzte Speicherung, danach fragt das Overlay', async () => {
     const reihenfolge: string[] = []
     let putFertig: () => void = () => {}
     vi.stubGlobal(
@@ -237,8 +237,9 @@ describe('SpielView: Countdown, Prüfung und Setzen', () => {
           return Promise.resolve(
             Response.json(
               beispielMatch({
-                status: 'laeuft',
+                status: 'startbereit',
                 aufbauEndeAm: null,
+                startFristEndeAm: '2026-11-16T10:00:30.000Z',
                 pruefung: null,
                 ich: { labyrinthGesetzt: true, startBestaetigt: false, nachbesserungEndeAm: null },
               }),
@@ -257,8 +258,9 @@ describe('SpielView: Countdown, Prüfung und Setzen', () => {
     putFertig()
     await flushPromises()
     expect(reihenfolge).toEqual(['PUT gestartet', 'PUT fertig', 'place'])
-    expect(wrapper.find('[data-test=zug]').exists()).toBe(true)
+    expect(wrapper.find('[data-test=bereitschaft]').exists()).toBe(true)
     expect(wrapper.find('[data-test=setzen]').exists()).toBe(false)
+    // Die Startfrist zeigt das Overlay, nicht der Countdown oben
     expect(wrapper.find('[data-test=countdown]').exists()).toBe(false)
     expect(wrapper.find('[data-test=mauer-A1_A2]').attributes('disabled')).toBeDefined()
   })
@@ -425,6 +427,33 @@ describe('SpielView im Spiel', () => {
     expect(verlauf).toContain('Computer: C1, Ja')
   })
 
+  it('fragt auch während der Wiedergabe ab, damit die Abruffrist nicht abläuft', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'setInterval', 'clearInterval'] })
+    const attrappe = spielServer(() =>
+      Response.json({
+        ziel: 'B1',
+        ergebnis: 'nein',
+        position: 'A1',
+        mauer: 'A1_B1',
+        computerAnfragen: [
+          { ziel: 'C1', ergebnis: 'ja', position: 'C1', mauer: null },
+          { ziel: 'D1', ergebnis: 'ja', position: 'D1', mauer: null },
+          { ziel: 'E1', ergebnis: 'ja', position: 'E1', mauer: null },
+        ],
+        match: imSpiel({ anfrageNr: 5, version: 2 }),
+      }),
+    )
+    const { wrapper } = await aufbauen()
+    const gegner = wrapper.findAllComponents({ name: 'LabyrinthFeld' })[1]!
+    await gegner.find('[data-test=zelle-B1]').trigger('click')
+    await flushPromises()
+
+    await vi.advanceTimersByTimeAsync(1500)
+    expect(wrapper.find('[data-test=zug]').text()).toContain('Computer sucht')
+    const abrufe = attrappe.mock.calls.filter(([url]) => String(url).includes('since=2'))
+    expect(abrufe.length).toBeGreaterThan(0)
+  })
+
   it('zeigt das Spielende und deckt das Labyrinth des Gegners auf', async () => {
     spielServer(() =>
       Response.json({
@@ -490,5 +519,138 @@ describe('SpielView im Spiel', () => {
     stand = imSpiel({ version: 2, amZug: 'id-1' })
     await vi.advanceTimersByTimeAsync(1500)
     expect(wrapper.find('[data-test=zug]').text()).toContain('Du bist am Zug')
+  })
+})
+
+describe('SpielView: Fristen (Phase 4)', () => {
+  afterEach(() => vi.useRealTimers())
+
+  const GESETZT = { labyrinthGesetzt: true, startBestaetigt: false, nachbesserungEndeAm: null }
+  const startbereit = (aenderungen: Partial<Match> = {}) =>
+    beispielMatch({
+      status: 'startbereit',
+      aufbauEndeAm: null,
+      startFristEndeAm: '2026-11-16T10:00:30.000Z',
+      pruefung: null,
+      ich: GESETZT,
+      gegner: { ...GESETZT, startBestaetigt: true },
+      meinLabyrinth: { schatz: 'F6', mauern: [] },
+      ...aenderungen,
+    })
+
+  it('Overlay zeigt die Startfrist, "Spiel starten" schickt ready und startet das Spiel', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] })
+    vi.setSystemTime(Date.parse('2026-11-16T10:00:00.000Z'))
+    const attrappe = serverAttrappe({
+      '/api/matches/match-1': () => Response.json(startbereit()),
+      '/api/matches/match-1/ready': () =>
+        Response.json(
+          startbereit({
+            status: 'laeuft',
+            startFristEndeAm: null,
+            amZug: 'id-1',
+            zugEndeAm: '2026-11-16T10:01:00.000Z',
+            ich: { ...GESETZT, startBestaetigt: true },
+          }),
+        ),
+    })
+    const { wrapper } = await aufbauen()
+    expect(wrapper.find('[data-test=bereitschaft]').text()).toContain('Bist du bereit')
+    expect(wrapper.find('[data-test=bereit-countdown]').text()).toBe('0:30')
+
+    await wrapper.find('[data-test=starten]').trigger('click')
+    await flushPromises()
+    expect(attrappe.mock.calls.some(([url]) => String(url).endsWith('/ready'))).toBe(true)
+    expect(wrapper.find('[data-test=bereitschaft]').exists()).toBe(false)
+    expect(wrapper.find('[data-test=verlauf]').text()).toContain('Du hast die Auslosung gewonnen')
+    // Jetzt läuft die Zugfrist
+    expect(wrapper.find('[data-test=countdown]').text()).toBe('1:00')
+    expect(wrapper.find('[data-test=countdown]').attributes('title')).toBe('Deine Bedenkzeit')
+  })
+
+  it('nach der eigenen Bestätigung wartet das Overlay auf den Gegner', async () => {
+    serverAttrappe({
+      '/api/matches/match-1': () =>
+        Response.json(startbereit({ ich: { ...GESETZT, startBestaetigt: true }, gegner: GESETZT })),
+    })
+    const { wrapper } = await aufbauen()
+    expect(wrapper.find('[data-test=starten]').exists()).toBe(false)
+    expect(wrapper.find('[data-test=warte-gegner]').exists()).toBe(true)
+  })
+
+  it('Nachbesserung zeigt eigene Frist und Hinweis, das Feld bleibt bearbeitbar', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] })
+    vi.setSystemTime(Date.parse('2026-11-16T10:03:00.000Z'))
+    serverAttrappe({
+      '/api/matches/match-1': () =>
+        Response.json(
+          beispielMatch({
+            serverZeit: '2026-11-16T10:03:00.000Z',
+            ich: {
+              labyrinthGesetzt: false,
+              startBestaetigt: false,
+              nachbesserungEndeAm: '2026-11-16T10:04:00.000Z',
+            },
+            meinLabyrinth: { schatz: 'F6', mauern: ['E6_F6', 'F5_F6'] },
+            pruefung: {
+              loesbar: false,
+              meldung: 'Schatz nicht erreichbar',
+              problematischeMauern: ['E6_F6', 'F5_F6'],
+            },
+          }),
+        ),
+    })
+    const { wrapper } = await aufbauen()
+    expect(wrapper.find('[data-test=countdown]').text()).toBe('1:00')
+    expect(wrapper.find('[data-test=countdown]').attributes('title')).toBe(
+      'Restzeit zum Nachbessern',
+    )
+    expect(wrapper.find('[data-test=nachbesserung]').text()).toContain('eine Minute')
+    expect(wrapper.find('[data-test=mauer-A1_A2]').attributes('disabled')).toBeUndefined()
+  })
+
+  it('übernimmt nach dem automatischen Setzen das Labyrinth des Servers', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    let stand = beispielMatch({ meinLabyrinth: { schatz: null, mauern: ['A1_A2'] } })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>(async () => Response.json(stand)),
+    )
+    const { wrapper } = await aufbauen()
+    const eigen = () => wrapper.findAllComponents({ name: 'LabyrinthFeld' })[0]!
+    expect(eigen().find('[data-test=schatz]').exists()).toBe(false)
+
+    // Aufbauzeit vorbei: Der Server hat den Schatz auf C4 gelegt
+    stand = startbereit({ version: 2, meinLabyrinth: { schatz: 'C4', mauern: ['A1_A2'] } })
+    await vi.advanceTimersByTimeAsync(1500)
+    expect(eigen().find('[data-test=zelle-C4] [data-test=schatz]').exists()).toBe(true)
+  })
+
+  it('abgebrochenes Match zeigt keinen Sieger, sondern "Abgebrochen"', async () => {
+    serverAttrappe({
+      '/api/matches/match-1': () =>
+        Response.json(beispielMatch({ status: 'abgebrochen', aufbauEndeAm: null })),
+    })
+    const { wrapper } = await aufbauen()
+    const ergebnis = wrapper.find('[data-test=ergebnis]').text()
+    expect(ergebnis).toContain('Abgebrochen')
+    expect(ergebnis).not.toContain('Verloren')
+  })
+
+  it('zeigt "Verbindung abgebrochen" als Grund bei Abwesenheit', async () => {
+    serverAttrappe({
+      '/api/matches/match-1': () =>
+        Response.json(
+          beispielMatch({
+            status: 'beendet',
+            aufbauEndeAm: null,
+            siegerId: 'computer',
+            endegrund: 'abwesenheit',
+          }),
+        ),
+    })
+    const { wrapper } = await aufbauen()
+    expect(wrapper.find('[data-test=ergebnis]').text()).toContain('Verloren')
+    expect(wrapper.find('[data-test=ergebnis]').text()).toContain('Verbindung abgebrochen')
   })
 })
