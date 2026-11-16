@@ -52,11 +52,11 @@ Deno.test('ansicht: Aufbau zeigt Fristen als Text, eigenen Entwurf und Prüfung'
   assertEquals(ansicht.gegner?.labyrinthGesetzt, true)
 })
 
-Deno.test('ansicht: Spieler enthalten nur id, name und istComputer', () => {
+Deno.test('ansicht: Spieler enthalten nur id, name, istComputer und anfragen', () => {
   const ansicht = ansichtFuer(matchImAufbau(), NUTZER.id, JETZT)
   assertEquals(ansicht.spieler, [
-    { id: 'n1', name: 'Nudl', istComputer: false },
-    { id: 'computer', name: 'Computer', istComputer: true },
+    { id: 'n1', name: 'Nudl', istComputer: false, anfragen: 0 },
+    { id: 'computer', name: 'Computer', istComputer: true, anfragen: 0 },
   ])
 })
 

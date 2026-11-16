@@ -37,8 +37,8 @@ export function beispielMatch(aenderungen: Partial<Match> = {}): Match {
     code: null,
     competitionId: null,
     spieler: [
-      { id: 'id-1', name: 'nudl', istComputer: false },
-      { id: 'computer', name: 'Computer', istComputer: true },
+      { id: 'id-1', name: 'nudl', istComputer: false, anfragen: 0 },
+      { id: 'computer', name: 'Computer', istComputer: true, anfragen: 0 },
     ],
     amZug: null,
     anfrageNr: 1,

@@ -87,6 +87,7 @@ export type Spieler = {
   id: string
   name: string
   istComputer: boolean
+  anfragen: number // Zahl der gestellten Anfragen, die Endansicht zeigt sie für beide
 }
 
 /** Fortschritt eines Spielers in Aufbau und Start; enthält nie das Labyrinth */

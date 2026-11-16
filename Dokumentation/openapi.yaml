@@ -889,7 +889,7 @@ components:
 
     Spieler:
       type: object
-      required: [id, name]
+      required: [id, name, anfragen]
       properties:
         id:
           type: string
@@ -898,6 +898,10 @@ components:
         istComputer:
           type: boolean
           default: false
+        anfragen:
+          type: integer
+          minimum: 0
+          description: Zahl der gestellten Anfragen. Beide Spieler sehen die Anfragen des anderen ohnehin live, die Zahl ist deshalb nicht geheim. Die Endansicht zeigt sie für beide.
 
     Bereitschaft:
       type: object

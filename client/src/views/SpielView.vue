@@ -424,6 +424,12 @@ onUnmounted(() => {
           {{ match.siegerId === meineId ? 'Gewonnen!' : 'Verloren' }}
         </p>
         <p v-if="match.endegrund" class="text-sm">{{ ENDEGRUND_TEXT[match.endegrund] }}</p>
+        <p data-test="anfragen" class="text-sm">
+          Anfragen:
+          <template v-for="(s, i) in match.spieler" :key="s.id">
+            {{ i > 0 ? ' · ' : '' }}{{ s.id === meineId ? 'Du' : s.name }} {{ s.anfragen }}
+          </template>
+        </p>
         <RouterLink to="/dashboard" class="mt-2 inline-block underline">Zum Dashboard</RouterLink>
       </div>
 

@@ -28,7 +28,12 @@ export function ansichtFuer(match: MatchIntern, nutzerId: string, jetzt: Date): 
     status: match.status,
     code: null,
     competitionId: null,
-    spieler: match.spieler.map((s) => ({ id: s.id, name: s.name, istComputer: s.istComputer })),
+    spieler: match.spieler.map((s) => ({
+      id: s.id,
+      name: s.name,
+      istComputer: s.istComputer,
+      anfragen: s.anfragen,
+    })),
     amZug: match.amZug,
     anfrageNr: match.anfrageNr,
     aufbauEndeAm: match.aufbauEndeAm?.toISOString() ?? null,

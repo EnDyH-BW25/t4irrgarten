@@ -653,4 +653,25 @@ describe('SpielView: Fristen (Phase 4)', () => {
     expect(wrapper.find('[data-test=ergebnis]').text()).toContain('Verloren')
     expect(wrapper.find('[data-test=ergebnis]').text()).toContain('Verbindung abgebrochen')
   })
+
+  it('zeigt am Ende die Anfragen beider Spieler', async () => {
+    serverAttrappe({
+      '/api/matches/match-1': () =>
+        Response.json(
+          beispielMatch({
+            status: 'beendet',
+            aufbauEndeAm: null,
+            siegerId: 'id-1',
+            endegrund: 'schatz',
+            spieler: [
+              { id: 'id-1', name: 'nudl', istComputer: false, anfragen: 12 },
+              { id: 'computer', name: 'Computer', istComputer: true, anfragen: 15 },
+            ],
+          }),
+        ),
+    })
+    const { wrapper } = await aufbauen()
+    const text = wrapper.find('[data-test=anfragen]').text().replace(/\s+/g, ' ')
+    expect(text).toBe('Anfragen: Du 12 · Computer 15')
+  })
 })
