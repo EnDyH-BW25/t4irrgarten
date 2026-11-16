@@ -26,8 +26,9 @@ export function ansichtFuer(match: MatchIntern, nutzerId: string, jetzt: Date): 
     modus: match.modus,
     schwierigkeit: match.schwierigkeit,
     status: match.status,
-    code: null, // folgt in Schritt 3
-    codeEndeAm: null,
+    // Im Status wartet ist nur der Ersteller Teilnehmer. Nur er sieht den Code.
+    code: match.code,
+    codeEndeAm: match.codeEndeAm?.toISOString() ?? null,
     competitionId: null,
     spieler: match.spieler.map((s) => ({
       id: s.id,

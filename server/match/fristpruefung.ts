@@ -20,6 +20,7 @@ export function fristenPruefen(
 ): boolean {
   const vorher = match.version
   // Reihenfolge wie im Spielablauf. Jede Prüfung kann den Status für die nächste ändern.
+  if (match.status === 'wartet') codefristPruefen(match, jetzt)
   if (match.status === 'aufbau') aufbaufristPruefen(match, jetzt, zufall)
   if (match.status === 'startbereit') startfristPruefen(match, jetzt)
   if (match.status === 'laeuft') spielfristenPruefen(match, jetzt)
@@ -31,6 +32,13 @@ export function abrufMerken(match: MatchIntern, nutzerId: string, jetzt: Date): 
   const spieler = match.spieler.find((s) => s.id === nutzerId)
   // Kein version++: Ein Lebenszeichen ändert nichts, was der Client sieht. Sonst gäbe es nie 304.
   if (spieler) spieler.letzterAbrufAm = jetzt
+}
+
+/** Warteraum: Ist der Code abgelaufen, ohne dass jemand beigetreten ist, endet das Match ohne Ergebnis */
+function codefristPruefen(match: MatchIntern, jetzt: Date): void {
+  if (jetzt.getTime() < match.codeEndeAm!.getTime()) return
+  abbrechen(match)
+  match.version++
 }
 
 /**

@@ -107,6 +107,29 @@ function spielerAnlegen(
   }
 }
 
+/**
+ * Zweiter Spieler tritt mit dem Code bei. Ab jetzt läuft für beide dieselbe Aufbauzeit.
+ * Den Code hat die Route schon über den MatchSpeicher gefunden.
+ */
+export function beitreten(match: MatchIntern, nutzer: Pick<Nutzer, 'id' | 'name'>, jetzt: Date) {
+  if (match.status !== 'wartet') {
+    throw new ApiFehler(409, 'KONFLIKT', 'Du kannst diesem Spiel nicht beitreten.')
+  }
+  if (match.spieler.some((s) => s.id === nutzer.id)) {
+    throw new ApiFehler(409, 'KONFLIKT', 'Du kannst deinem eigenen Spiel nicht beitreten.')
+  }
+
+  match.spieler.push(spielerAnlegen(nutzer.id, nutzer.name, false, jetzt))
+  match.status = 'aufbau'
+  // Der Code hat seinen Zweck erfüllt
+  match.code = null
+  match.codeEndeAm = null
+  match.aufbauEndeAm = new Date(jetzt.getTime() + AUFBAU_DAUER_MS)
+  // Beide gelten ab jetzt als anwesend; der Ersteller hat vielleicht lange gewartet
+  for (const s of match.spieler) s.letzterAbrufAm = jetzt
+  match.version++
+}
+
 /** Liefert den anfragenden Spieler und seinen Gegner. Fremde Nutzer erhalten 403. */
 export function teilnehmer(match: MatchIntern, nutzerId: string) {
   const ich = match.spieler.find((s) => s.id === nutzerId)
@@ -233,14 +256,17 @@ function objektLesen(eingabe: unknown): Record<string, unknown> {
 
 // ---------- Aufgeben ----------
 
-/** Der Spieler gibt auf, im Aufbau wie im Spiel. Der Gegner gewinnt. */
+/** Der Spieler gibt auf, im Aufbau wie im Spiel. Der Gegner gewinnt. Im Warteraum bricht es ab. */
 export function aufgeben(match: MatchIntern, nutzerId: string, jetzt: Date): void {
   const { gegner } = teilnehmer(match, nutzerId)
-  if (!['aufbau', 'startbereit', 'laeuft'].includes(match.status)) {
+  if (match.status === 'wartet') {
+    // Warteraum: Es gibt noch keinen Gegner, also auch keinen Sieger und kein Ergebnis
+    abbrechen(match)
+  } else if (['aufbau', 'startbereit', 'laeuft'].includes(match.status)) {
+    beenden(match, gegner!.id, 'aufgabe', jetzt)
+  } else {
     throw new ApiFehler(409, 'KONFLIKT', 'Das Match ist schon vorbei.')
   }
-  // Im Modus computer gibt es immer einen Gegner; ohne Gegner (Duell im Status wartet) folgt Phase 4
-  beenden(match, gegner!.id, 'aufgabe', jetzt)
   match.version++
 }
 
@@ -338,6 +364,8 @@ export function abbrechen(match: MatchIntern): void {
 }
 
 function fristenLoeschen(match: MatchIntern): void {
+  match.code = null
+  match.codeEndeAm = null
   match.amZug = null
   match.aufbauEndeAm = null
   match.startFristEndeAm = null
