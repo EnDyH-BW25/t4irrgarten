@@ -7,12 +7,15 @@ import { festerZufall } from '../testHilfen.ts'
 import {
   anfrageStellen,
   AUFBAU_DAUER_MS,
+  aufgeben,
+  bereitBestaetigen,
   COMPUTER,
   computerMatchErstellen,
   entwurfSpeichern,
   labyrinthSetzen,
   teilnehmer,
 } from './ablauf.ts'
+import { START_FRIST_MS, ZUG_FRIST_MS } from './fristen.ts'
 import type { MatchIntern } from './typen.ts'
 
 const NUTZER = { id: 'n1', name: 'Nudl' }
@@ -102,63 +105,104 @@ Deno.test('entwurfSpeichern: falsche Form des Body liefert 400', () => {
 
 Deno.test('labyrinthSetzen: ohne Schatz 422 SCHATZ_FEHLT', () => {
   const match = computerMatchErstellen(NUTZER, 'einfach', JETZT)
-  wirft(() => labyrinthSetzen(match, NUTZER.id), 422, 'SCHATZ_FEHLT')
+  wirft(() => labyrinthSetzen(match, NUTZER.id, JETZT), 422, 'SCHATZ_FEHLT')
 })
 
 Deno.test('labyrinthSetzen: unlösbar 422 mit problematischen Mauern', () => {
   const match = computerMatchErstellen(NUTZER, 'einfach', JETZT)
   entwurfSpeichern(match, NUTZER.id, { schatz: 'C4', mauern: ['A1_A2', 'A1_B1'] })
-  const fehler = wirft(() => labyrinthSetzen(match, NUTZER.id), 422, 'LABYRINTH_UNLOESBAR')
+  const fehler = wirft(() => labyrinthSetzen(match, NUTZER.id, JETZT), 422, 'LABYRINTH_UNLOESBAR')
   assertEquals(fehler.zusatz.problematischeMauern, ['A1_A2', 'A1_B1'])
   assertEquals(match.status, 'aufbau')
 })
 
-Deno.test('labyrinthSetzen: Spiel startet, der Mensch gewinnt die Auslosung', () => {
+Deno.test('labyrinthSetzen: Match wird startbereit, der Computer ist schon bereit', () => {
   const match = vorbereitetesMatch()
-  labyrinthSetzen(match, NUTZER.id, ZUERST)
-  assertEquals(match.status, 'laeuft')
-  assertEquals(match.amZug, NUTZER.id)
+  labyrinthSetzen(match, NUTZER.id, JETZT)
+  assertEquals(match.status, 'startbereit')
   assertEquals(match.aufbauEndeAm, null)
+  assertEquals(match.startFristEndeAm!.getTime(), JETZT.getTime() + START_FRIST_MS)
+  assertEquals(match.amZug, null)
+  assertEquals(match.spieler.map((s) => s.startBestaetigt), [false, true])
+})
+
+// ---------- Bereitschaft ----------
+
+const SPAETER = new Date(JETZT.getTime() + 10_000)
+
+Deno.test('bereit: Spiel startet, der Mensch gewinnt die Auslosung, die Zugfrist läuft', () => {
+  const match = vorbereitetesMatch()
+  labyrinthSetzen(match, NUTZER.id, JETZT)
+  bereitBestaetigen(match, NUTZER.id, SPAETER, ZUERST)
+  assertEquals(match.status, 'laeuft')
+  assertEquals(match.startFristEndeAm, null)
+  assertEquals(match.amZug, NUTZER.id)
+  assertEquals(match.zugEndeAm!.getTime(), SPAETER.getTime() + ZUG_FRIST_MS)
+  assertEquals(match.spieler[0].letzterAbrufAm, SPAETER)
   assertEquals(match.spieler[1].anfragen, 0)
 })
 
-Deno.test('labyrinthSetzen: gewinnt der Computer die Auslosung, zieht er sofort', () => {
+Deno.test('bereit: vor dem Setzen und nach dem Start 409 KONFLIKT', () => {
   const match = vorbereitetesMatch()
-  labyrinthSetzen(match, NUTZER.id, ZULETZT)
+  wirft(() => bereitBestaetigen(match, NUTZER.id, JETZT), 409, 'KONFLIKT')
+  labyrinthSetzen(match, NUTZER.id, JETZT)
+  bereitBestaetigen(match, NUTZER.id, JETZT, ZUERST)
+  wirft(() => bereitBestaetigen(match, NUTZER.id, JETZT), 409, 'KONFLIKT')
+})
+
+Deno.test('aufgeben: auch im Status startbereit möglich', () => {
+  const match = vorbereitetesMatch()
+  labyrinthSetzen(match, NUTZER.id, JETZT)
+  aufgeben(match, NUTZER.id)
+  assertEquals(match.status, 'beendet')
+  assertEquals(match.siegerId, COMPUTER.id)
+  assertEquals(match.startFristEndeAm, null)
+})
+
+Deno.test('bereit: gewinnt der Computer die Auslosung, zieht er sofort', () => {
+  const match = vorbereitetesMatch()
+  labyrinthSetzen(match, NUTZER.id, JETZT)
+  bereitBestaetigen(match, NUTZER.id, JETZT, ZULETZT)
   // Der Computer wählt immer die letzte Richtung: erst nach unten bis F1, dann nach rechts zu F6
   assertEquals(match.spieler[1].karte.besuchteZellen.at(-1), 'F6')
   assertEquals(match.spieler[1].anfragen, 2)
   assertEquals(match.status, 'beendet')
   assertEquals(match.siegerId, COMPUTER.id)
+  assertEquals(match.zugEndeAm, null)
 })
 
 Deno.test('nach dem Setzen: Entwurf und erneutes Setzen liefern 409 AUFBAU_BEENDET', () => {
   const match = vorbereitetesMatch()
-  labyrinthSetzen(match, NUTZER.id, ZUERST)
+  labyrinthSetzen(match, NUTZER.id, JETZT)
   wirft(
     () => entwurfSpeichern(match, NUTZER.id, { schatz: 'B2', mauern: [] }),
     409,
     'AUFBAU_BEENDET',
   )
-  wirft(() => labyrinthSetzen(match, NUTZER.id), 409, 'AUFBAU_BEENDET')
+  wirft(() => labyrinthSetzen(match, NUTZER.id, JETZT), 409, 'AUFBAU_BEENDET')
 })
 
 // ---------- 4.3 Anfragen ----------
 
 function laufendesMatch(): MatchIntern {
   const match = vorbereitetesMatch()
-  labyrinthSetzen(match, NUTZER.id, ZUERST)
+  labyrinthSetzen(match, NUTZER.id, JETZT)
+  bereitBestaetigen(match, NUTZER.id, JETZT, ZUERST)
   return match
 }
 
 Deno.test('anfrage: vor dem Spielstart 409 KONFLIKT', () => {
   const match = vorbereitetesMatch()
-  wirft(() => anfrageStellen(match, NUTZER.id, { anfrageNr: 1, ziel: 'A2' }), 409, 'KONFLIKT')
+  wirft(
+    () => anfrageStellen(match, NUTZER.id, { anfrageNr: 1, ziel: 'A2' }, JETZT),
+    409,
+    'KONFLIKT',
+  )
 })
 
 Deno.test('anfrage: ja über ein Feld, der Spieler bleibt am Zug', () => {
   const match = laufendesMatch()
-  const ausgang = anfrageStellen(match, NUTZER.id, { anfrageNr: 1, ziel: 'A2' }, ZUERST)
+  const ausgang = anfrageStellen(match, NUTZER.id, { anfrageNr: 1, ziel: 'A2' }, JETZT, ZUERST)
   assertEquals(ausgang.ergebnis.ergebnis, 'ja')
   assertEquals(ausgang.computerAnfragen, [])
   assertEquals(match.amZug, NUTZER.id)
@@ -166,10 +210,20 @@ Deno.test('anfrage: ja über ein Feld, der Spieler bleibt am Zug', () => {
   assertEquals(match.spieler[0].karte.position, 'A2')
 })
 
+Deno.test('anfrage: jede Anfrage startet die Zugfrist neu', () => {
+  const match = laufendesMatch()
+  anfrageStellen(match, NUTZER.id, { anfrageNr: 1, ziel: 'A2' }, SPAETER, ZUERST)
+  assertEquals(match.zugEndeAm!.getTime(), SPAETER.getTime() + ZUG_FRIST_MS)
+  // nein: Zugwechsel, der Computer spielt sofort, die neue Frist gilt wieder dem Menschen
+  anfrageStellen(match, NUTZER.id, { anfrageNr: 2, ziel: 'F2' }, JETZT, ZUERST)
+  assertEquals(match.amZug, NUTZER.id)
+  assertEquals(match.zugEndeAm!.getTime(), JETZT.getTime() + ZUG_FRIST_MS)
+})
+
 Deno.test('anfrage: nein, danach spielt der Computer seinen Zug', () => {
   const match = laufendesMatch()
   // Computer-Labyrinth hat A1_B1: Der Mensch kommt nicht nach unten
-  const ausgang = anfrageStellen(match, NUTZER.id, { anfrageNr: 1, ziel: 'F1' }, ZUERST)
+  const ausgang = anfrageStellen(match, NUTZER.id, { anfrageNr: 1, ziel: 'F1' }, JETZT, ZUERST)
   assertEquals(ausgang.ergebnis.ergebnis, 'nein')
   // Der Computer fragt nach rechts und trifft sofort die Mauer A1_A2 im Labyrinth des Menschen
   assertEquals(ausgang.computerAnfragen, [
@@ -181,7 +235,7 @@ Deno.test('anfrage: nein, danach spielt der Computer seinen Zug', () => {
 
 Deno.test('anfrage: Schatz gefunden beendet das Match', () => {
   const match = laufendesMatch()
-  const ausgang = anfrageStellen(match, NUTZER.id, { anfrageNr: 1, ziel: 'A6' }, ZUERST)
+  const ausgang = anfrageStellen(match, NUTZER.id, { anfrageNr: 1, ziel: 'A6' }, JETZT, ZUERST)
   assertEquals(ausgang.ergebnis.ergebnis, 'schatzGefunden')
   assertEquals(ausgang.ergebnis.position, 'A3')
   assertEquals(match.status, 'beendet')
@@ -192,15 +246,19 @@ Deno.test('anfrage: Schatz gefunden beendet das Match', () => {
 
 Deno.test('anfrage: veraltete anfrageNr liefert 409 KONFLIKT', () => {
   const match = laufendesMatch()
-  anfrageStellen(match, NUTZER.id, { anfrageNr: 1, ziel: 'A2' }, ZUERST)
+  anfrageStellen(match, NUTZER.id, { anfrageNr: 1, ziel: 'A2' }, JETZT, ZUERST)
   // Doppelklick: dieselbe Nummer noch einmal
-  wirft(() => anfrageStellen(match, NUTZER.id, { anfrageNr: 1, ziel: 'A2' }), 409, 'KONFLIKT')
+  wirft(
+    () => anfrageStellen(match, NUTZER.id, { anfrageNr: 1, ziel: 'A2' }, JETZT),
+    409,
+    'KONFLIKT',
+  )
 })
 
 Deno.test('anfrage: diagonales Ziel liefert 400 ZIEL_NICHT_GERADE', () => {
   const match = laufendesMatch()
   wirft(
-    () => anfrageStellen(match, NUTZER.id, { anfrageNr: 1, ziel: 'B2' }),
+    () => anfrageStellen(match, NUTZER.id, { anfrageNr: 1, ziel: 'B2' }, JETZT),
     400,
     'ZIEL_NICHT_GERADE',
   )
@@ -209,13 +267,21 @@ Deno.test('anfrage: diagonales Ziel liefert 400 ZIEL_NICHT_GERADE', () => {
 
 Deno.test('anfrage: kaputte Eingabe liefert 400 VALIDIERUNG', () => {
   const match = laufendesMatch()
-  wirft(() => anfrageStellen(match, NUTZER.id, { anfrageNr: 0, ziel: 'Z9' }), 400, 'VALIDIERUNG')
+  wirft(
+    () => anfrageStellen(match, NUTZER.id, { anfrageNr: 0, ziel: 'Z9' }, JETZT),
+    400,
+    'VALIDIERUNG',
+  )
 })
 
 Deno.test('anfrage: wer nicht am Zug ist, erhält 409 NICHT_AM_ZUG', () => {
   const match = laufendesMatch()
   match.amZug = COMPUTER.id
-  wirft(() => anfrageStellen(match, NUTZER.id, { anfrageNr: 1, ziel: 'A2' }), 409, 'NICHT_AM_ZUG')
+  wirft(
+    () => anfrageStellen(match, NUTZER.id, { anfrageNr: 1, ziel: 'A2' }, JETZT),
+    409,
+    'NICHT_AM_ZUG',
+  )
 })
 
 // ---------- Ganze Partie ----------
@@ -230,14 +296,15 @@ Deno.test('ganze Partie: endet immer mit einem Sieger, Zähler stimmen', () => {
       NUTZER.id,
       computerMatchErstellen(NUTZER, 'schwer', JETZT, zufall).spieler[1].entwurf,
     )
-    labyrinthSetzen(match, NUTZER.id, zufall)
+    labyrinthSetzen(match, NUTZER.id, JETZT)
+    bereitBestaetigen(match, NUTZER.id, JETZT, zufall)
 
     // Der Mensch spielt mit der Strategie des Computers
     let runden = 0
     while (match.status === 'laeuft') {
       assertEquals(match.amZug, NUTZER.id)
       const ziel = zielWaehlen(match.spieler[0].karte, zufall)
-      anfrageStellen(match, NUTZER.id, { anfrageNr: match.anfrageNr, ziel }, zufall)
+      anfrageStellen(match, NUTZER.id, { anfrageNr: match.anfrageNr, ziel }, JETZT, zufall)
       assert(++runden < 500, `Lauf ${i}: kein Ende`)
     }
 

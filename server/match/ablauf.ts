@@ -13,12 +13,13 @@ import { karteFortschreiben, neueKarte } from '../spiellogik/karte.ts'
 import { istZelle } from '../spiellogik/koordinaten.ts'
 import { entwurfPruefen, loesbarkeitPruefen } from '../spiellogik/regeln.ts'
 import { computerZug } from '../spiellogik/sucher.ts'
+import { START_FRIST_MS, ZUG_FRIST_MS } from './fristen.ts'
 import type { MatchIntern, SpielerDaten } from './typen.ts'
 
 /** Der Computer als Spieler; die Id ist fest, weil es kein Nutzerkonto gibt */
 export const COMPUTER = { id: 'computer', name: 'Computer' }
 
-/** Dauer der Aufbauzeit; die Frist prüft erst Phase 4 */
+/** Dauer der Aufbauzeit */
 export const AUFBAU_DAUER_MS = 3 * 60 * 1000
 
 // ---------- 4.1 Erstellen ----------
@@ -95,12 +96,8 @@ export function entwurfSpeichern(match: MatchIntern, nutzerId: string, eingabe: 
   match.version++
 }
 
-/** "Irrgarten setzen": prüft den Entwurf erneut und startet das Spiel, sobald alle gesetzt haben */
-export function labyrinthSetzen(
-  match: MatchIntern,
-  nutzerId: string,
-  zufall: Zufall = Math.random,
-) {
+/** "Irrgarten setzen": prüft den Entwurf erneut. Haben alle gesetzt, folgt die Bereitschaft. */
+export function labyrinthSetzen(match: MatchIntern, nutzerId: string, jetzt: Date) {
   const { ich } = teilnehmer(match, nutzerId)
   aufbauPruefen(match, ich)
 
@@ -115,17 +112,56 @@ export function labyrinthSetzen(
   }
 
   ich.gesetzt = true
-  if (match.spieler.every((s) => s.gesetzt)) spielStarten(match, zufall)
+  if (match.spieler.every((s) => s.gesetzt)) startbereitMachen(match, jetzt)
   match.version++
 }
 
-/** Phase 3: direkt von aufbau nach laeuft. Die Bereitschaft mit startbereit folgt in Phase 4. */
-function spielStarten(match: MatchIntern, zufall: Zufall): void {
-  match.status = 'laeuft'
+/**
+ * Beide Labyrinthe stehen: Das Overlay fragt nach der Bereitschaft. Der Computer ist immer bereit.
+ * `ab` ist der Zeitpunkt, an dem der Aufbau endete. Die Startfrist zählt ab dort.
+ */
+export function startbereitMachen(match: MatchIntern, ab: Date): void {
+  match.status = 'startbereit'
   match.aufbauEndeAm = null
+  match.startFristEndeAm = new Date(ab.getTime() + START_FRIST_MS)
+  for (const s of match.spieler) if (s.istComputer) s.startBestaetigt = true
+}
+
+// ---------- Bereitschaft ----------
+
+/** "Spiel starten" im Overlay. Sind alle bereit, beginnt das Spiel. */
+export function bereitBestaetigen(
+  match: MatchIntern,
+  nutzerId: string,
+  jetzt: Date,
+  zufall: Zufall = Math.random,
+): void {
+  const { ich } = teilnehmer(match, nutzerId)
+  if (match.status !== 'startbereit') {
+    throw new ApiFehler(409, 'KONFLIKT', 'Das Match wartet nicht auf deine Bereitschaft.')
+  }
+  // Doppelklick: Die zweite Bestätigung ändert nichts
+  if (ich.startBestaetigt) return
+
+  ich.startBestaetigt = true
+  if (match.spieler.every((s) => s.startBestaetigt)) spielStarten(match, jetzt, zufall)
+  match.version++
+}
+
+function spielStarten(match: MatchIntern, jetzt: Date, zufall: Zufall): void {
+  match.status = 'laeuft'
+  match.startFristEndeAm = null
+  // Die Abruffrist beginnt mit dem Spiel; vorher galt die Startfrist
+  for (const s of match.spieler) s.letzterAbrufAm = jetzt
   // Auslosung: jeder Spieler mit gleicher Chance
   match.amZug = match.spieler[Math.floor(zufall() * match.spieler.length)].id
   if (match.spieler.find((s) => s.id === match.amZug)!.istComputer) computerSpielt(match, zufall)
+  zugFristStarten(match, jetzt)
+}
+
+/** Startet die Zugfrist für den Spieler in amZug. Nach Spielende gibt es keine. */
+function zugFristStarten(match: MatchIntern, jetzt: Date): void {
+  match.zugEndeAm = match.status === 'laeuft' ? new Date(jetzt.getTime() + ZUG_FRIST_MS) : null
 }
 
 function aufbauPruefen(match: MatchIntern, ich: SpielerDaten): void {
@@ -162,7 +198,7 @@ function objektLesen(eingabe: unknown): Record<string, unknown> {
 /** Der Spieler gibt auf, im Aufbau wie im Spiel. Der Gegner gewinnt. */
 export function aufgeben(match: MatchIntern, nutzerId: string): void {
   const { gegner } = teilnehmer(match, nutzerId)
-  if (match.status !== 'aufbau' && match.status !== 'laeuft') {
+  if (!['aufbau', 'startbereit', 'laeuft'].includes(match.status)) {
     throw new ApiFehler(409, 'KONFLIKT', 'Das Match ist schon vorbei.')
   }
   // Im Modus computer gibt es immer einen Gegner; ohne Gegner (Duell im Status wartet) folgt Phase 4
@@ -178,11 +214,15 @@ export type AnfrageAusgang = {
   computerAnfragen: AnfrageErgebnis[] | null // nur im Modus computer
 }
 
-/** Stellt eine Anfrage. Endet der Zug, spielt im Modus computer sofort der Computer. */
+/**
+ * Stellt eine Anfrage. Endet der Zug, spielt im Modus computer sofort der Computer.
+ * Jede Anfrage startet die Zugfrist neu, nach einem Zugwechsel für den Gegner.
+ */
 export function anfrageStellen(
   match: MatchIntern,
   nutzerId: string,
   eingabe: unknown,
+  jetzt: Date,
   zufall: Zufall = Math.random,
 ): AnfrageAusgang {
   const { ich, gegner } = teilnehmer(match, nutzerId)
@@ -216,6 +256,7 @@ export function anfrageStellen(
     if (gegner!.istComputer) computerAnfragen = computerSpielt(match, zufall)
   }
 
+  zugFristStarten(match, jetzt)
   match.version++
   return { ergebnis, computerAnfragen }
 }
@@ -240,12 +281,26 @@ function anfrageEintragen(match: MatchIntern, spieler: SpielerDaten, ergebnis: A
   match.anfrageNr++
 }
 
-function beenden(match: MatchIntern, siegerId: string, grund: Endegrund): void {
+/** Beendet das Match mit Sieger. Alle Fristen enden mit. */
+export function beenden(match: MatchIntern, siegerId: string, grund: Endegrund): void {
   match.status = 'beendet'
-  match.amZug = null
-  match.aufbauEndeAm = null
+  fristenLoeschen(match)
   match.siegerId = siegerId
   match.endegrund = grund
+}
+
+/** Bricht das Match ohne Sieger und ohne Ergebnis ab */
+export function abbrechen(match: MatchIntern): void {
+  match.status = 'abgebrochen'
+  fristenLoeschen(match)
+}
+
+function fristenLoeschen(match: MatchIntern): void {
+  match.amZug = null
+  match.aufbauEndeAm = null
+  match.startFristEndeAm = null
+  match.zugEndeAm = null
+  for (const s of match.spieler) s.nachbesserungEndeAm = null
 }
 
 /** Nach dem Setzen liegt der Schatz sicher; vorher wäre das ein Programmfehler */

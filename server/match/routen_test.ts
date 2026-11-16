@@ -53,6 +53,7 @@ async function aufbauen(pfad: string) {
     const id = await neuesMatch(sid)
     await senden(sid, 'PUT', `/${id}/labyrinth`, { schatz: 'F6', mauern: ['A1_A2'] })
     await senden(sid, 'POST', `/${id}/labyrinth/place`)
+    await senden(sid, 'POST', `/${id}/ready`)
     return id
   }
 
@@ -243,16 +244,24 @@ Deno.test('place: unlösbar ergibt 422 mit den Mauern im Body', () =>
     assert(body.problematischeMauern.length > 0)
   }))
 
-Deno.test('place: startet das Spiel, danach ist der Aufbau zu', () =>
+Deno.test('place und ready: erst startbereit, nach der Bestätigung läuft das Spiel', () =>
   mitTempOrdner(async (pfad) => {
-    const { anmelden, senden, laufendesMatch } = await aufbauen(pfad)
+    const { anmelden, senden, neuesMatch } = await aufbauen(pfad)
     const sid = await anmelden('nudl')
-    const id = await laufendesMatch(sid)
+    const id = await neuesMatch(sid)
+    await senden(sid, 'PUT', `/${id}/labyrinth`, { schatz: 'F6', mauern: ['A1_A2'] })
 
-    const match: Match = await (await senden(sid, 'GET', `/${id}`)).json()
-    assertEquals(match.status, 'laeuft')
-    assertEquals(match.amZug, match.spieler[0].id)
+    const gesetzt: Match = await (await senden(sid, 'POST', `/${id}/labyrinth/place`)).json()
+    assertEquals(gesetzt.status, 'startbereit')
+    assertEquals(gesetzt.startFristEndeAm, '2026-11-15T10:00:30.000Z')
+    assertEquals(gesetzt.gegner?.startBestaetigt, true)
     await fehler(await senden(sid, 'POST', `/${id}/labyrinth/place`), 409, 'AUFBAU_BEENDET')
+
+    const bereit: Match = await (await senden(sid, 'POST', `/${id}/ready`)).json()
+    assertEquals(bereit.status, 'laeuft')
+    assertEquals(bereit.amZug, bereit.spieler[0].id)
+    assertEquals(bereit.zugEndeAm, '2026-11-15T10:01:00.000Z')
+    await fehler(await senden(sid, 'POST', `/${id}/ready`), 409, 'KONFLIKT')
   }))
 
 // ---------- Anfragen ----------

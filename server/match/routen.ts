@@ -9,6 +9,7 @@ import type { Zufall } from '../spiellogik/generator.ts'
 import {
   anfrageStellen,
   aufgeben,
+  bereitBestaetigen,
   computerMatchErstellen,
   entwurfSpeichern,
   labyrinthSetzen,
@@ -80,7 +81,13 @@ export function matchRouten(
 
   routen.post('/:id/labyrinth/place', (c) => {
     const match = matchHolen(c)
-    labyrinthSetzen(match, c.get('nutzer').id, zufall)
+    labyrinthSetzen(match, c.get('nutzer').id, uhr())
+    return ansicht(c, match)
+  })
+
+  routen.post('/:id/ready', (c) => {
+    const match = matchHolen(c)
+    bereitBestaetigen(match, c.get('nutzer').id, uhr(), zufall)
     return ansicht(c, match)
   })
 
@@ -91,6 +98,7 @@ export function matchRouten(
       match,
       nutzerId,
       await jsonLesen(c),
+      uhr(),
       zufall,
     )
     const antwort: AnfrageAntwort = {

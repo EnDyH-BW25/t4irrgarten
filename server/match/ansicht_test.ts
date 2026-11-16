@@ -2,6 +2,7 @@ import { assert, assertEquals, assertThrows } from '@std/assert'
 import { ApiFehler } from '../fehler.ts'
 import {
   anfrageStellen,
+  bereitBestaetigen,
   computerMatchErstellen,
   entwurfSpeichern,
   labyrinthSetzen,
@@ -28,7 +29,8 @@ function matchImAufbau(): MatchIntern {
 /** Match im Spiel; der Mensch ist am Zug */
 function laufendesMatch(): MatchIntern {
   const match = matchImAufbau()
-  labyrinthSetzen(match, NUTZER.id, ZUERST)
+  labyrinthSetzen(match, NUTZER.id, JETZT)
+  bereitBestaetigen(match, NUTZER.id, JETZT, ZUERST)
   return match
 }
 
@@ -88,7 +90,8 @@ Deno.test('ansicht: Labyrinth des Gegners bleibt im Aufbau und im Spiel geheim',
   assertEquals(ansichtFuer(match, NUTZER.id, JETZT).gegnerLabyrinth, null)
   assert(!verraetGeheimnis(match), 'Aufbau verrät das Labyrinth')
 
-  labyrinthSetzen(match, NUTZER.id, ZUERST)
+  labyrinthSetzen(match, NUTZER.id, JETZT)
+  bereitBestaetigen(match, NUTZER.id, JETZT, ZUERST)
   assertEquals(ansichtFuer(match, NUTZER.id, JETZT).gegnerLabyrinth, null)
   assert(!verraetGeheimnis(match), 'Spiel verrät das Labyrinth')
 })
@@ -96,7 +99,7 @@ Deno.test('ansicht: Labyrinth des Gegners bleibt im Aufbau und im Spiel geheim',
 Deno.test('ansicht: Karten zeigen den Fortschritt beider Seiten', () => {
   const match = laufendesMatch()
   // F1 stößt an A1_B1: nein, danach spielt der Computer
-  anfrageStellen(match, NUTZER.id, { anfrageNr: 1, ziel: 'F1' }, ZUERST)
+  anfrageStellen(match, NUTZER.id, { anfrageNr: 1, ziel: 'F1' }, JETZT, ZUERST)
   const ansicht = ansichtFuer(match, NUTZER.id, JETZT)
 
   assertEquals(ansicht.bekannteKarte.entdeckteMauern, ['A1_B1'])
@@ -105,7 +108,7 @@ Deno.test('ansicht: Karten zeigen den Fortschritt beider Seiten', () => {
 
 Deno.test('ansicht: nach Spielende ist das Labyrinth des Gegners sichtbar', () => {
   const match = laufendesMatch()
-  anfrageStellen(match, NUTZER.id, { anfrageNr: 1, ziel: 'A3' }, ZUERST)
+  anfrageStellen(match, NUTZER.id, { anfrageNr: 1, ziel: 'A3' }, JETZT, ZUERST)
   const ansicht = ansichtFuer(match, NUTZER.id, JETZT)
 
   assertEquals(ansicht.status, 'beendet')
