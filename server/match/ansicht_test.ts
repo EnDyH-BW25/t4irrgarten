@@ -60,7 +60,16 @@ Deno.test('ansicht: Spieler enthalten nur id, name und istComputer', () => {
 
 Deno.test('ansicht: Felder ohne Wert sind null und fehlen nie', () => {
   const ansicht = ansichtFuer(matchImAufbau(), NUTZER.id, JETZT)
-  for (const feld of ['code', 'competitionId', 'startFristEndeAm', 'amZug', 'siegerId'] as const) {
+  for (
+    const feld of [
+      'code',
+      'competitionId',
+      'startFristEndeAm',
+      'zugEndeAm',
+      'amZug',
+      'siegerId',
+    ] as const
+  ) {
     assert(feld in ansicht, `${feld} fehlt`)
     assertEquals(ansicht[feld], null)
   }

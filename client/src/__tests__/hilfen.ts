@@ -44,6 +44,7 @@ export function beispielMatch(aenderungen: Partial<Match> = {}): Match {
     anfrageNr: 1,
     aufbauEndeAm: '2026-11-16T10:03:00.000Z',
     startFristEndeAm: null,
+    zugEndeAm: null,
     ich: { labyrinthGesetzt: false, startBestaetigt: false, nachbesserungEndeAm: null },
     gegner: { labyrinthGesetzt: true, startBestaetigt: false, nachbesserungEndeAm: null },
     pruefung: { loesbar: null, meldung: null, problematischeMauern: [] },

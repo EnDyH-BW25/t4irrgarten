@@ -105,7 +105,12 @@ export type BekannteKarte = {
 
 /** Grund für das Ende eines Matches */
 export type Endegrund =
-  'schatz' | 'aufgabe' | 'abwesenheit' | 'zugfrist' | 'startfrist' | 'walkover'
+  | 'schatz'
+  | 'aufgabe'
+  | 'abwesenheit'
+  | 'zugfrist'
+  | 'startfrist'
+  | 'walkover'
 
 /** Stand eines Matches aus Sicht des anfragenden Spielers; der Server schickt immer alle Felder */
 export type Match = {
@@ -124,6 +129,7 @@ export type Match = {
 
   aufbauEndeAm: string | null // nur im Status aufbau gesetzt
   startFristEndeAm: string | null // nur im Status startbereit gesetzt
+  zugEndeAm: string | null // nur im Status laeuft gesetzt, gilt für den Spieler in amZug
 
   ich: Bereitschaft
   gegner: Bereitschaft | null // fehlt im Status wartet

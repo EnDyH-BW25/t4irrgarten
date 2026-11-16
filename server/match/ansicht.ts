@@ -3,12 +3,12 @@ import { loesbarkeitPruefen } from '../spiellogik/regeln.ts'
 import { gesetztesLabyrinth, teilnehmer } from './ablauf.ts'
 import type { MatchIntern, SpielerDaten } from './typen.ts'
 
-/** Bereitschaft eines Spielers; Startbestätigung und Nachbesserung folgen in Phase 4 */
+/** Bereitschaft eines Spielers: gesetzt, bestätigt und Ende der Nachbesserung */
 function bereitschaft(s: SpielerDaten): Bereitschaft {
   return {
     labyrinthGesetzt: s.gesetzt,
-    startBestaetigt: false,
-    nachbesserungEndeAm: null,
+    startBestaetigt: s.startBestaetigt,
+    nachbesserungEndeAm: s.nachbesserungEndeAm?.toISOString() ?? null,
   }
 }
 
@@ -32,7 +32,8 @@ export function ansichtFuer(match: MatchIntern, nutzerId: string, jetzt: Date): 
     amZug: match.amZug,
     anfrageNr: match.anfrageNr,
     aufbauEndeAm: match.aufbauEndeAm?.toISOString() ?? null,
-    startFristEndeAm: null,
+    startFristEndeAm: match.startFristEndeAm?.toISOString() ?? null,
+    zugEndeAm: match.zugEndeAm?.toISOString() ?? null,
 
     // Bereitschaft
     ich: bereitschaft(ich),

@@ -30,8 +30,8 @@ export function computerMatchErstellen(
   jetzt: Date,
   zufall: Zufall = Math.random,
 ): MatchIntern {
-  const mensch = spielerAnlegen(nutzer.id, nutzer.name, false)
-  const computer = spielerAnlegen(COMPUTER.id, COMPUTER.name, true)
+  const mensch = spielerAnlegen(nutzer.id, nutzer.name, false, jetzt)
+  const computer = spielerAnlegen(COMPUTER.id, COMPUTER.name, true, jetzt)
   computer.entwurf = labyrinthErzeugen(schwierigkeit, zufall)
   computer.gesetzt = true
 
@@ -45,20 +45,30 @@ export function computerMatchErstellen(
     amZug: null,
     anfrageNr: 1,
     aufbauEndeAm: new Date(jetzt.getTime() + AUFBAU_DAUER_MS),
+    startFristEndeAm: null,
+    zugEndeAm: null,
     siegerId: null,
     endegrund: null,
   }
 }
 
-function spielerAnlegen(id: string, name: string, istComputer: boolean): SpielerDaten {
+function spielerAnlegen(
+  id: string,
+  name: string,
+  istComputer: boolean,
+  jetzt: Date,
+): SpielerDaten {
   return {
     id,
     name,
     istComputer,
     entwurf: { schatz: null, mauern: [] },
     gesetzt: false,
+    startBestaetigt: false,
     karte: neueKarte(),
     anfragen: 0,
+    nachbesserungEndeAm: null,
+    letzterAbrufAm: jetzt,
   }
 }
 
