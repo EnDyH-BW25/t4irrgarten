@@ -16,6 +16,7 @@ import {
   teilnehmer,
 } from './ablauf.ts'
 import { ansichtFuer } from './ansicht.ts'
+import { abrufMerken, fristenPruefen } from './fristpruefung.ts'
 import type { MatchSpeicher } from './speicher.ts'
 import type { MatchIntern } from './typen.ts'
 
@@ -34,11 +35,29 @@ export function matchRouten(
   const routen = new Hono<AuthUmgebung>()
   routen.use(anmeldungPruefen(sessions, nutzerSpeicher))
 
-  /** Match zur Id aus dem Pfad oder 404 */
-  function matchHolen(c: Context): MatchIntern {
+  /**
+   * Match zur Id aus dem Pfad oder 404. Jede Route unter /:id holt das Match hier. So prüft der
+   * Server bei jedem Zugriff die Fristen, und jeder Zugriff gilt als Lebenszeichen.
+   */
+  function matchHolen(c: Context<AuthUmgebung>): MatchIntern {
     const match = matches.holen(c.req.param('id') ?? '')
     if (!match) throw new ApiFehler(404, 'NICHT_GEFUNDEN', 'Das Match gibt es nicht.')
+    const nutzerId = c.get('nutzer').id
+    // Erst die Teilnahme: Fremde lösen keine Fristen aus und erfahren nichts über das Match
+    teilnehmer(match, nutzerId)
+    const jetzt = uhr()
+    // Erst Fristen, dann Lebenszeichen. Sonst tilgt die Rückkehr eine abgelaufene Abruffrist.
+    fristenPruefen(match, jetzt, zufall)
+    abrufMerken(match, nutzerId, jetzt)
     return match
+  }
+
+  /** Offenes Match des Nutzers nach dem Nachtragen der Fristen. Ein abgelaufenes zählt nicht. */
+  function offenesMatch(nutzerId: string): MatchIntern | null {
+    const match = matches.offenesMatchVon(nutzerId)
+    if (!match) return null
+    fristenPruefen(match, uhr(), zufall)
+    return matches.offenesMatchVon(nutzerId)
   }
 
   /** Antwortet mit der Sicht des angemeldeten Spielers */
@@ -49,7 +68,7 @@ export function matchRouten(
   routen.post('/', async (c) => {
     const nutzer = c.get('nutzer')
     const schwierigkeit = matchAnlegenLesen(await jsonLesen(c))
-    if (matches.offenesMatchVon(nutzer.id)) {
+    if (offenesMatch(nutzer.id)) {
       throw new ApiFehler(409, 'KONFLIKT', 'Du spielst bereits ein Match.')
     }
     const match = computerMatchErstellen(nutzer, schwierigkeit, uhr(), zufall)
@@ -59,16 +78,16 @@ export function matchRouten(
   })
 
   // Steht vor /:id, sonst hielte Hono "current" für eine Match-Id
+  // Kein Lebenszeichen: Das Dashboard schaut nur nach, der Spieler ist nicht im Spiel
   routen.get('/current', (c) => {
-    const match = matches.offenesMatchVon(c.get('nutzer').id)
+    const match = offenesMatch(c.get('nutzer').id)
     if (!match) throw new ApiFehler(404, 'NICHT_GEFUNDEN', 'Du hast kein offenes Match.')
     return ansicht(c, match)
   })
 
   routen.get('/:id', (c) => {
+    // matchHolen prüft die Teilnahme zuerst: Fremde erkennen nicht einmal an der 304, ob sich etwas tut
     const match = matchHolen(c)
-    // Erst die Teilnahme: Fremde sollen nicht einmal an der 304 erkennen, ob sich etwas tut
-    teilnehmer(match, c.get('nutzer').id)
     if (sinceLesen(c.req.query('since')) === match.version) return c.body(null, 304)
     return ansicht(c, match)
   })

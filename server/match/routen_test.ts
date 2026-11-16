@@ -13,14 +13,23 @@ const ZUERST = () => 0
 const GEHEIM: Labyrinth = { schatz: 'A3', mauern: ['A1_B1'] }
 const COMPUTER_MATCH = { modus: 'computer', schwierigkeit: 'standard' }
 
-/** App mit festem Zufall, fester Uhr und einem Match-Speicher, in den der Test hineinsehen kann */
+/**
+ * App mit festem Zufall, verstellbarer Uhr und einem Match-Speicher, in den der Test hineinsehen
+ * kann. Die Uhr steht auf JETZT, bis der Test sie mit vorspulen weiterdreht.
+ */
 async function aufbauen(pfad: string) {
   const matches = new MatchSpeicher()
+  let zeit = JETZT
   const app = appErstellen(new Sessions(), await NutzerSpeicher.laden(pfad), {
     matches,
-    uhr: () => JETZT,
+    uhr: () => zeit,
     zufall: ZUERST,
   })
+
+  /** Dreht die Uhr um ms Millisekunden weiter */
+  function vorspulen(ms: number) {
+    zeit = new Date(zeit.getTime() + ms)
+  }
 
   /** Registriert einen Nutzer und liefert seine Session-Id */
   async function anmelden(name: string): Promise<string> {
@@ -62,7 +71,7 @@ async function aufbauen(pfad: string) {
     return await (await app.request('/api/auth/me', { headers: { Cookie: `sid=${sid}` } })).json()
   }
 
-  return { matches, anmelden, senden, ich, neuesMatch, laufendesMatch }
+  return { matches, anmelden, senden, ich, neuesMatch, laufendesMatch, vorspulen }
 }
 
 /** Prüft Status und Fehlercode einer Fehlerantwort */
@@ -345,4 +354,88 @@ Deno.test('resign: auch im Aufbau möglich', () =>
     assertEquals(match.status, 'beendet')
     assertEquals(match.aufbauEndeAm, null)
     assertEquals(match.pruefung, null)
+  }))
+
+// ---------- Fristen ----------
+
+Deno.test('fristen: GET nach Aufbauende setzt den Entwurf, das Match wird startbereit', () =>
+  mitTempOrdner(async (pfad) => {
+    const { anmelden, senden, neuesMatch, vorspulen } = await aufbauen(pfad)
+    const sid = await anmelden('nudl')
+    const id = await neuesMatch(sid)
+    await senden(sid, 'PUT', `/${id}/labyrinth`, { schatz: 'F6', mauern: ['A1_A2'] })
+
+    vorspulen(3 * 60_000)
+    const match: Match = await (await senden(sid, 'GET', `/${id}`)).json()
+    assertEquals(match.status, 'startbereit')
+    assertEquals(match.ich.labyrinthGesetzt, true)
+    assertEquals(match.startFristEndeAm, '2026-11-15T10:03:30.000Z')
+  }))
+
+Deno.test('fristen: 15 Sekunden ohne Abruf, der Spieler verliert wegen Abwesenheit', () =>
+  mitTempOrdner(async (pfad) => {
+    const { anmelden, senden, laufendesMatch, vorspulen } = await aufbauen(pfad)
+    const sid = await anmelden('nudl')
+    const id = await laufendesMatch(sid)
+
+    vorspulen(15_000)
+    const match: Match = await (await senden(sid, 'GET', `/${id}`)).json()
+    assertEquals(match.status, 'beendet')
+    assertEquals(match.endegrund, 'abwesenheit')
+    assertEquals(match.siegerId, 'computer')
+  }))
+
+Deno.test('fristen: regelmäßige Abrufe halten das Match am Leben und liefern weiter 304', () =>
+  mitTempOrdner(async (pfad) => {
+    const { anmelden, senden, laufendesMatch, vorspulen } = await aufbauen(pfad)
+    const sid = await anmelden('nudl')
+    const id = await laufendesMatch(sid)
+    const { version } = await (await senden(sid, 'GET', `/${id}`)).json()
+
+    for (let i = 0; i < 5; i++) {
+      vorspulen(10_000)
+      assertEquals((await senden(sid, 'GET', `/${id}?since=${version}`)).status, 304)
+    }
+    // Nach 60 Sekunden ohne Anfrage greift die Zugfrist trotz Abrufen
+    vorspulen(10_000)
+    const match: Match = await (await senden(sid, 'GET', `/${id}`)).json()
+    assertEquals(match.endegrund, 'zugfrist')
+  }))
+
+Deno.test('fristen: verlassenes Match sperrt nicht, /current und POST tragen die Fristen nach', () =>
+  mitTempOrdner(async (pfad) => {
+    const { anmelden, senden, laufendesMatch, vorspulen, matches } = await aufbauen(pfad)
+    const sid = await anmelden('nudl')
+    const id = await laufendesMatch(sid)
+    assertEquals((await senden(sid, 'GET', '/current')).status, 200)
+
+    // Tab zu, zehn Minuten später zurück im Dashboard
+    vorspulen(10 * 60_000)
+    await fehler(await senden(sid, 'GET', '/current'), 404, 'NICHT_GEFUNDEN')
+    assertEquals(matches.holen(id)!.endegrund, 'abwesenheit')
+    assertEquals((await senden(sid, 'POST', '', COMPUTER_MATCH)).status, 201)
+  }))
+
+Deno.test('fristen: POST /matches trägt die Fristen vor der 409 nach', () =>
+  mitTempOrdner(async (pfad) => {
+    const { anmelden, senden, laufendesMatch, vorspulen } = await aufbauen(pfad)
+    const sid = await anmelden('nudl')
+    await laufendesMatch(sid)
+    await fehler(await senden(sid, 'POST', '', COMPUTER_MATCH), 409, 'KONFLIKT')
+
+    // Ohne vorherigen Aufruf von /current: POST selbst merkt, dass das Match vorbei ist
+    vorspulen(20_000)
+    assertEquals((await senden(sid, 'POST', '', COMPUTER_MATCH)).status, 201)
+  }))
+
+Deno.test('fristen: ein fremder Abruf löst keine Frist aus', () =>
+  mitTempOrdner(async (pfad) => {
+    const { anmelden, senden, laufendesMatch, vorspulen, matches } = await aufbauen(pfad)
+    const sid = await anmelden('nudl')
+    const fremd = await anmelden('fremd')
+    const id = await laufendesMatch(sid)
+
+    vorspulen(20_000)
+    await fehler(await senden(fremd, 'GET', `/${id}`), 403, 'VERBOTEN')
+    assertEquals(matches.holen(id)!.status, 'laeuft')
   }))
