@@ -1,4 +1,5 @@
 import type { Nutzer, Schwierigkeit } from '../../shared/types.ts'
+import { JsonDatei } from '../jsonDatei.ts'
 
 /** Nutzer mit Passwort-Hash; verlässt nie den Server */
 export type GespeicherterNutzer = Nutzer & { passwortHash: string }
@@ -10,25 +11,18 @@ export function alsNutzer(n: GespeicherterNutzer): Nutzer {
 
 /** Hält alle Nutzer im Speicher und schreibt jede Änderung in eine JSON-Datei */
 export class NutzerSpeicher {
-  private schreibvorgang: Promise<void> = Promise.resolve()
-
   private constructor(
-    private readonly pfad: string,
+    private readonly datei: JsonDatei<GespeicherterNutzer[]>,
     private readonly nutzer: GespeicherterNutzer[],
   ) {}
 
   /** Liest die Datei; fehlt sie, startet der Speicher leer */
   static async laden(pfad: string): Promise<NutzerSpeicher> {
-    try {
-      const text = await Deno.readTextFile(pfad)
-      const gelesen: GespeicherterNutzer[] = JSON.parse(text)
-      // Konten aus Phase 2 kennen die Schwierigkeit noch nicht
-      for (const n of gelesen) n.schwierigkeit ??= 'standard'
-      return new NutzerSpeicher(pfad, gelesen)
-    } catch (err) {
-      if (err instanceof Deno.errors.NotFound) return new NutzerSpeicher(pfad, [])
-      throw err
-    }
+    const datei = new JsonDatei<GespeicherterNutzer[]>(pfad)
+    const gelesen = await datei.lesen([])
+    // Konten aus Phase 2 kennen die Schwierigkeit noch nicht
+    for (const n of gelesen) n.schwierigkeit ??= 'standard'
+    return new NutzerSpeicher(datei, gelesen)
   }
 
   /** Sucht ohne Rücksicht auf Groß- und Kleinschreibung */
@@ -63,15 +57,7 @@ export class NutzerSpeicher {
     await this.speichern()
   }
 
-  /** Schreibt nacheinander und über eine temporäre Datei, damit die Datei nie halb fertig ist */
   private speichern(): Promise<void> {
-    this.schreibvorgang = this.schreibvorgang
-      .catch(() => {}) // ein früherer Fehler soll spätere Schreibvorgänge nicht blockieren
-      .then(async () => {
-        const tmp = `${this.pfad}.tmp`
-        await Deno.writeTextFile(tmp, JSON.stringify(this.nutzer, null, 2))
-        await Deno.rename(tmp, this.pfad)
-      })
-    return this.schreibvorgang
+    return this.datei.schreiben(this.nutzer)
   }
 }
