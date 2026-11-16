@@ -68,9 +68,9 @@ const feldFarbe = computed(() => (props.art === 'eigen' ? 'bg-blue-300' : 'bg-or
 const mauerFarbe = computed(() => (props.art === 'eigen' ? 'bg-orange-400' : 'bg-blue-600'))
 
 function mauerKlasse(m: Mauer): string {
-  if (markiert.value.has(m)) return 'bg-red-600'
-  if (gesetzt.value.has(m)) return mauerFarbe.value
-  return props.bearbeitbar ? 'hover:bg-slate-400/60' : ''
+  if (!gesetzt.value.has(m)) return props.bearbeitbar ? 'hover:bg-slate-400/60' : ''
+  // Rot nur, solange die Mauer noch steht; die Prüfung des Servers kann kurz hinterherhinken
+  return markiert.value.has(m) ? 'bg-red-600' : mauerFarbe.value
 }
 
 const lage = (p: Platz) => ({ gridRow: p.zeile, gridColumn: p.spalte })
