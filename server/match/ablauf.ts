@@ -43,6 +43,8 @@ export function computerMatchErstellen(
     modus: 'computer',
     schwierigkeit,
     status: 'aufbau',
+    code: null,
+    codeEndeAm: null,
     spieler: [mensch, computer],
     amZug: null,
     anfrageNr: 1,
@@ -70,6 +72,7 @@ function spielerAnlegen(
     startBestaetigt: false,
     karte: neueKarte(),
     anfragen: 0,
+    verlauf: [],
     nachbesserungEndeAm: null,
     letzterAbrufAm: jetzt,
   }
@@ -286,6 +289,7 @@ function computerSpielt(match: MatchIntern, jetzt: Date, zufall: Zufall): Anfrag
 function anfrageEintragen(match: MatchIntern, spieler: SpielerDaten, ergebnis: AnfrageErgebnis) {
   spieler.karte = karteFortschreiben(spieler.karte, ergebnis)
   spieler.anfragen++
+  spieler.verlauf.push(ergebnis)
   match.anfrageNr++
 }
 

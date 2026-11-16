@@ -35,6 +35,7 @@ export function beispielMatch(aenderungen: Partial<Match> = {}): Match {
     schwierigkeit: 'standard',
     status: 'aufbau',
     code: null,
+    codeEndeAm: null,
     competitionId: null,
     spieler: [
       { id: 'id-1', name: 'nudl', istComputer: false, anfragen: 0 },
@@ -51,6 +52,7 @@ export function beispielMatch(aenderungen: Partial<Match> = {}): Match {
     meinLabyrinth: { schatz: null, mauern: [] },
     bekannteKarte: { position: 'A1', besuchteZellen: ['A1'], entdeckteMauern: [] },
     gegnerKarte: { position: 'A1', besuchteZellen: ['A1'], entdeckteMauern: [] },
+    gegnerAnfragen: [],
     siegerId: null,
     endegrund: null,
     gegnerLabyrinth: null,

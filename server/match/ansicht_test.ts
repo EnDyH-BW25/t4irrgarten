@@ -106,6 +106,18 @@ Deno.test('ansicht: Karten zeigen den Fortschritt beider Seiten', () => {
   assertEquals(ansicht.gegnerKarte?.entdeckteMauern, ['A1_A2'])
 })
 
+Deno.test('ansicht: zeigt alle Anfragen des Gegners mit Antwort, älteste zuerst', () => {
+  const match = laufendesMatch()
+  anfrageStellen(match, NUTZER.id, { anfrageNr: 1, ziel: 'F1' }, JETZT, ZUERST)
+  const ansicht = ansichtFuer(match, NUTZER.id, JETZT)
+
+  // Der Computer hat seinen Zug gespielt; die Ansicht zeigt genau seine Liste
+  assertEquals(ansicht.gegnerAnfragen, match.spieler[1].verlauf)
+  assert(ansicht.gegnerAnfragen!.length > 0)
+  // Die letzte Anfrage des Computers beendet seinen Zug: Sie trifft eine Mauer
+  assertEquals(ansicht.gegnerAnfragen!.at(-1)!.mauer !== null, true)
+})
+
 Deno.test('ansicht: nach Spielende ist das Labyrinth des Gegners sichtbar', () => {
   const match = laufendesMatch()
   anfrageStellen(match, NUTZER.id, { anfrageNr: 1, ziel: 'A3' }, JETZT, ZUERST)

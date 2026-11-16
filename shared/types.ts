@@ -122,6 +122,7 @@ export type Match = {
   schwierigkeit: Schwierigkeit | null // nur im Modus computer gesetzt
   status: MatchStatus
   code: string | null // Spielcode, nur für den Ersteller im Status wartet
+  codeEndeAm: string | null // Ende der Gültigkeit des Codes, nur für den Ersteller im Status wartet
   competitionId: string | null // nur bei Matches eines Turniers gesetzt
 
   spieler: Spieler[]
@@ -138,6 +139,7 @@ export type Match = {
   meinLabyrinth: LabyrinthEntwurf | null // fehlt im Status wartet
   bekannteKarte: BekannteKarte // meine Suche im Labyrinth des Gegners
   gegnerKarte: BekannteKarte | null // Suche des Gegners in meinem Labyrinth; fehlt im Status wartet
+  gegnerAnfragen: AnfrageErgebnis[] | null // alle Anfragen des Gegners, älteste zuerst; fehlt im Status wartet
   siegerId: string | null // erst nach Spielende gesetzt
   endegrund: Endegrund | null // erst nach Spielende gesetzt
   gegnerLabyrinth: Labyrinth | null // erst nach Spielende gesetzt

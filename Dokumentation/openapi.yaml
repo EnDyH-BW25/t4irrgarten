@@ -963,6 +963,11 @@ components:
             - $ref: '#/components/schemas/Code'
           nullable: true
           description: Spielcode. Nur der Ersteller sieht ihn und nur im Status `wartet`.
+        codeEndeAm:
+          type: string
+          format: date-time
+          nullable: true
+          description: Ende der Gültigkeit des Spielcodes. Nur für den Ersteller und nur im Status `wartet` gesetzt. Danach bricht der Server das Match ab.
         competitionId:
           type: string
           format: uuid
@@ -1016,6 +1021,12 @@ components:
             - $ref: '#/components/schemas/BekannteKarte'
           nullable: true
           description: Suche des Gegners im eigenen Labyrinth. Damit zeichnet der Client die Spur des Gegners auch nach einem Neuladen. Fehlt im Status `wartet`.
+        gegnerAnfragen:
+          type: array
+          nullable: true
+          items:
+            $ref: '#/components/schemas/AnfrageErgebnis'
+          description: Alle Anfragen des Gegners mit Antwort, älteste zuerst. Damit verfolgt der Spieler die Suche des Gegners live. Fehlt im Status `wartet`.
         siegerId:
           type: string
           nullable: true

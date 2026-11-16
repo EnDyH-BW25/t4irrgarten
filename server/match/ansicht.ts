@@ -26,7 +26,8 @@ export function ansichtFuer(match: MatchIntern, nutzerId: string, jetzt: Date): 
     modus: match.modus,
     schwierigkeit: match.schwierigkeit,
     status: match.status,
-    code: null,
+    code: null, // folgt in Schritt 3
+    codeEndeAm: null,
     competitionId: null,
     spieler: match.spieler.map((s) => ({
       id: s.id,
@@ -49,6 +50,8 @@ export function ansichtFuer(match: MatchIntern, nutzerId: string, jetzt: Date): 
     meinLabyrinth: ich.entwurf,
     bekannteKarte: ich.karte,
     gegnerKarte: gegner?.karte ?? null,
+    // Live-Sicht: Die Anfragen des Gegners verraten nur, was er schon über mein Labyrinth weiß
+    gegnerAnfragen: gegner?.verlauf ?? null,
 
     // Ende
     siegerId: match.siegerId,
