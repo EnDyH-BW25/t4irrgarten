@@ -171,6 +171,13 @@ describe('SpielView im Aufbau', () => {
   })
 })
 
+/** Aufbau mit Schatz und lösbarem Entwurf: "Irrgarten setzen" ist frei */
+const loesbar = () =>
+  beispielMatch({
+    meinLabyrinth: { schatz: 'F6', mauern: [] },
+    pruefung: { loesbar: true, meldung: 'Schatz erreichbar', problematischeMauern: [] },
+  })
+
 describe('SpielView: Countdown, Prüfung und Setzen', () => {
   afterEach(() => vi.useRealTimers())
 
@@ -221,7 +228,7 @@ describe('SpielView: Countdown, Prüfung und Setzen', () => {
           return new Promise((fertig) => {
             putFertig = () => {
               reihenfolge.push('PUT fertig')
-              fertig(Response.json(beispielMatch()))
+              fertig(Response.json(loesbar()))
             }
           })
         }
@@ -238,11 +245,11 @@ describe('SpielView: Countdown, Prüfung und Setzen', () => {
             ),
           )
         }
-        return Promise.resolve(Response.json(beispielMatch()))
+        return Promise.resolve(Response.json(loesbar()))
       }),
     )
     const { wrapper } = await aufbauen()
-    await wrapper.find('[data-test=zelle-C4]').trigger('click')
+    await wrapper.find('[data-test=mauer-B2_B3]').trigger('click')
     await wrapper.find('[data-test=setzen]').trigger('click')
     await flushPromises()
     expect(reihenfolge).toEqual(['PUT gestartet']) // place wartet noch
@@ -256,30 +263,49 @@ describe('SpielView: Countdown, Prüfung und Setzen', () => {
     expect(wrapper.find('[data-test=mauer-A1_A2]').attributes('disabled')).toBeDefined()
   })
 
-  it('zeigt die Meldung des Servers, wenn der Schatz fehlt', async () => {
+  it('sperrt "Irrgarten setzen", solange der Schatz fehlt oder unerreichbar ist (ADR-007)', async () => {
+    serverAttrappe({ '/api/matches/match-1': () => Response.json(beispielMatch()) })
+    const ohneSchatz = (await aufbauen()).wrapper.find('[data-test=setzen]')
+    expect(ohneSchatz.attributes('disabled')).toBeDefined()
+
+    const unloesbar = beispielMatch({
+      pruefung: { loesbar: false, meldung: 'Schatz nicht erreichbar', problematischeMauern: [] },
+    })
+    serverAttrappe({ '/api/matches/match-1': () => Response.json(unloesbar) })
+    expect(
+      (await aufbauen()).wrapper.find('[data-test=setzen]').attributes('disabled'),
+    ).toBeDefined()
+
+    serverAttrappe({ '/api/matches/match-1': () => Response.json(loesbar()) })
+    expect(
+      (await aufbauen()).wrapper.find('[data-test=setzen]').attributes('disabled'),
+    ).toBeUndefined()
+  })
+
+  it('zeigt die Meldung des Servers, wenn er das Setzen trotzdem ablehnt', async () => {
     serverAttrappe({
-      '/api/matches/match-1': () => Response.json(beispielMatch()),
+      '/api/matches/match-1': () => Response.json(loesbar()),
       '/api/matches/match-1/labyrinth/place': () =>
         Response.json(
-          { fehler: { code: 'SCHATZ_FEHLT', nachricht: 'Platziere zuerst deinen Schatz.' } },
+          { fehler: { code: 'LABYRINTH_UNLOESBAR', nachricht: 'Schatz nicht erreichbar.' } },
           { status: 422 },
         ),
     })
     const { wrapper } = await aufbauen()
     await wrapper.find('[data-test=setzen]').trigger('click')
     await flushPromises()
-    expect(wrapper.find('[data-test=setz-fehler]').text()).toBe('Platziere zuerst deinen Schatz.')
+    expect(wrapper.find('[data-test=setz-fehler]').text()).toBe('Schatz nicht erreichbar.')
     expect(wrapper.find('[data-test=setzen]').exists()).toBe(true) // weiter bearbeitbar
   })
 
   it('setzt nicht, wenn auch der zweite Speicherversuch scheitert', async () => {
     const attrappe = vi.fn<typeof fetch>(async (url, optionen) => {
       if (optionen?.method === 'PUT') throw new TypeError('Failed to fetch')
-      return Response.json(beispielMatch())
+      return Response.json(loesbar())
     })
     vi.stubGlobal('fetch', attrappe)
     const { wrapper } = await aufbauen()
-    await wrapper.find('[data-test=zelle-C4]').trigger('click')
+    await wrapper.find('[data-test=mauer-B2_B3]').trigger('click')
     await flushPromises()
     await wrapper.find('[data-test=setzen]').trigger('click')
     await flushPromises()

@@ -369,7 +369,7 @@ onUnmounted(() => {
               type="button"
               data-test="setzen"
               class="w-full rounded bg-blue-700 px-3 py-2 text-white disabled:opacity-50"
-              :disabled="setzt"
+              :disabled="setzt || match.pruefung?.loesbar !== true"
               @click="setzen"
             >
               {{ setzt ? 'Bitte warten ...' : 'Irrgarten setzen' }}
