@@ -28,7 +28,7 @@ Die Reihenfolge folgt den Abhängigkeiten. Jede Phase endet mit einem spielbaren
 - Client: Spielbrett mit zwei 6x6-Feldern, Mauern setzen und entfernen, Zähler, Schatz platzieren
 - Live-Anzeige „Schatz erreichbar“ mit Markierung der problematischen Mauern
 - „Irrgarten setzen“, Anfragen stellen, eigene Karte mit Spur und entdeckten Mauern
-- Computer-Sucher: zuerst einfach, später mit Strategie je Schwierigkeit
+- Computer-Sucher mit einer Strategie für alle Schwierigkeiten. Die Schwierigkeit wirkt nur über das Labyrinth des Computers (ADR-004, ADR-015, ADR-025). Ein Simulationstest belegt die Abstufung.
 - Polling mit since=<version> und 304-Antwort. Der Client nutzt dafür `abfragen` aus client/src/api.ts.
 
 # Phase 4: Fristen und Spielende (1 Tag)
