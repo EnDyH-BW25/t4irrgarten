@@ -23,7 +23,7 @@ info:
     - Aufbau: drei Minuten ab Beitritt des Gegners, im Modus `computer` ab Anlage des Matches. Danach setzt der Server offene Labyrinthe selbst. Fehlt der Schatz, wählt er zufällig eine von A1 erreichbare Zelle außer A1.
     - Nachbesserung: Ist der Schatz bei Fristende nicht erreichbar, bekommt der Spieler eine weitere Minute. Der Gegner sieht nur den Hinweis, dass der Spieler überarbeitet. Danach öffnet der Server zufällig eine markierte Mauer, bis der Schatz erreichbar ist, und setzt das Labyrinth.
     - Bereitschaft: Haben beide Spieler gesetzt, bestätigen beide innerhalb von 30 Sekunden mit `POST /matches/{id}/ready`. Bestätigt nur ein Spieler, gewinnt er. Bestätigt keiner, endet das Match als `abgebrochen` ohne Ergebnis.
-    - Wer 15 Sekunden nicht abruft oder in seinem Zug 60 Sekunden keine Anfrage stellt, verliert. Aufgeben zählt als Niederlage.
+    - Wer 15 Sekunden nicht abruft oder in seinem Zug 60 Sekunden keine Anfrage stellt, verliert. Das Ende der Zugfrist steht in `zugEndeAm`. Aufgeben zählt als Niederlage.
     - Ein Match lässt sich nicht pausieren. Laufende Matches leben im Speicher des Servers. Ein Neustart beendet sie.
 
     **Spielregeln für Competitions**
@@ -984,6 +984,11 @@ components:
           format: date-time
           nullable: true
           description: Ende der Frist für die Bereitschaft. Nur im Status `startbereit` gesetzt.
+        zugEndeAm:
+          type: string
+          format: date-time
+          nullable: true
+          description: Ende der Zugfrist für den Spieler in `amZug`. Nur im Status `laeuft` gesetzt. Jede Anfrage startet die Frist neu. Bei einem Zugwechsel gilt sie für den neuen Spieler.
         ich:
           $ref: '#/components/schemas/Bereitschaft'
         gegner:
