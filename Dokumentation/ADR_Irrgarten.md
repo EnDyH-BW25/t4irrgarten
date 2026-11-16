@@ -19,14 +19,14 @@ Die Übersicht trennt zwei Angaben.
 | ADR-004 | Labyrinth-Generierung und Schwierigkeit             | Planung     | Akzeptiert | umgesetzt |
 | ADR-005 | Anfragen entlang von Zeile oder Spalte              | Planung     | Akzeptiert | umgesetzt |
 | ADR-006 | Aufbauphase unter Kontrolle des Servers             | Planung     | Akzeptiert | teilweise |
-| ADR-007 | Lösbarkeitsprüfung mit Nachbesserung                | Planung     | Akzeptiert | teilweise |
-| ADR-008 | Bereitschaftsprüfung und Abwesenheit                | Planung     | Akzeptiert | teilweise |
+| ADR-007 | Lösbarkeitsprüfung mit Nachbesserung                | Planung     | Akzeptiert | umgesetzt |
+| ADR-008 | Bereitschaftsprüfung und Abwesenheit                | Planung     | Akzeptiert | umgesetzt |
 | ADR-009 | Spielcode für das Duell                             | Planung     | Akzeptiert | geplant   |
 | ADR-010 | Turnier mit Host, Warteraum und Computer-Auffüllung | Planung     | Akzeptiert | geplant   |
 | ADR-011 | Turnierablauf, Ausstieg und Abbruch                 | Planung     | Akzeptiert | geplant   |
 | ADR-012 | Aktualisierung per Polling                          | Planung     | Akzeptiert | teilweise |
 | ADR-013 | Kein Gastmodus                                      | Planung     | Akzeptiert | umgesetzt |
-| ADR-014 | Ergebnisse vom Server, Statistik statt Rangliste    | Planung     | Akzeptiert | geplant   |
+| ADR-014 | Ergebnisse vom Server, Statistik statt Rangliste    | Planung     | Akzeptiert | teilweise |
 | ADR-015 | Dashboard, Schwierigkeit und Einstellungen          | Planung     | Akzeptiert | teilweise |
 | ADR-016 | Technologie-Stack                                   | Einrichtung | Akzeptiert | umgesetzt |
 | ADR-017 | Gemeinsame Typen im Ordner shared                   | 0           | Akzeptiert | umgesetzt |
@@ -39,7 +39,10 @@ Die Übersicht trennt zwei Angaben.
 | ADR-024 | Anmeldezustand im Client und geschützte Routen      | 2           | Akzeptiert | umgesetzt |
 | ADR-025 | Schatzplatzierung nach Schwierigkeit des Wegs       | 3           | Akzeptiert | umgesetzt |
 | ADR-026 | Match-Schicht im Speicher mit eigener Ansicht       | 3           | Akzeptiert | umgesetzt |
-| ADR-027 | Offenes Match und Schwierigkeit im Account          | 3           | Akzeptiert | teilweise |
+| ADR-027 | Offenes Match und Schwierigkeit im Account          | 3           | Akzeptiert | umgesetzt |
+| ADR-028 | Fristen ohne Timer bei jedem Zugriff                | 4           | Akzeptiert | umgesetzt |
+| ADR-029 | Ergebnisse in einer JSON-Datei beim Spielende       | 4           | Akzeptiert | umgesetzt |
+| ADR-030 | Zugfrist erst nach der Wiedergabe des Computerzugs  | 4           | Akzeptiert | umgesetzt |
 
 ---
 
@@ -841,11 +844,109 @@ Laut ADR-015 und Klartext ist "Standard" im Dashboard vorgewählt. Wer meist auf
 
 ---
 
+## ADR-028 Fristen ohne Timer bei jedem Zugriff
+
+### Kontext
+
+Ein Match hat fünf Fristen (ADR-006 bis ADR-008). Der Aufbau dauert drei Minuten, die Nachbesserung eine Minute, die Bereitschaft 30 Sekunden, ein Zug 60 Sekunden. Ohne Abruf gilt ein Spieler nach 15 Sekunden als abwesend. ADR-012 legt fest, dass der Server Fristen bei jedem Abruf prüft und keinen eigenen Timer braucht. Offen war, wie das genau abläuft. Im Modus `computer` ruft nach dem Schließen des Tabs niemand mehr ab. Ohne Prüfung sperrt ein verlassenes Match den Nutzer mit 409 (ADR-027). In Phase 3 führte das Setzen direkt zu `laeuft` (ADR-026). Der Status `startbereit` fehlte.
+
+### Entscheidung
+
+- `fristenPruefen(match, jetzt, zufall)` in `server/match/fristpruefung.ts` trägt alle abgelaufenen Fristen nach. Sie prüft in der Reihenfolge des Spielablaufs: Aufbau, dann Bereitschaft, dann Spiel. Jede Prüfung kann den Status für die nächste ändern.
+- Jede Folge zählt ab dem Fristende, nicht ab dem Abruf. Kehrt ein Spieler nach zehn Minuten zurück, läuft die ganze Kette in einem Aufruf ab.
+- Im Spiel zählt der früheste Verstoß. Zugfrist und Abruffrist stehen als Kandidaten nebeneinander, der mit dem früheren Ende entscheidet.
+- **Aufbauende:** Jeder Spieler ohne "Irrgarten setzen" wird gesetzt. Fehlt der Schatz, legt der Server ihn sofort. Liegt der Schatz unerreichbar, beginnt die Nachbesserung. Nach ihr öffnet der Server zufällig markierte Mauern (`labyrinthVervollstaendigen` in `server/spiellogik/automatik.ts`).
+- **Bereitschaft:** Nach dem Setzen aller Labyrinthe folgt `startbereit`. Die Startfrist zählt ab dem Zeitpunkt, an dem das letzte Labyrinth stand. Der Computer ist sofort bereit. `POST /matches/{id}/ready` bestätigt, und erst danach lost der Server den Startspieler aus.
+- **Spiel:** Das Feld `zugEndeAm` im Vertrag nennt das Ende der Zugfrist. Jede Anfrage startet sie neu. Die Abruffrist gilt nur im Status `laeuft` und beginnt mit dem Spielstart.
+- **Routen:** Jede Route unter `/matches/{id}` holt ihr Match über `matchHolen`. Die Funktion prüft erst die Teilnahme, dann die Fristen, dann speichert sie das Lebenszeichen (`abrufMerken`). `GET /matches/current` und `POST /matches` tragen die Fristen über `offenesMatch` vor der Antwort nach.
+- Ein Lebenszeichen erhöht `version` nicht. `GET /matches/current` zählt nicht als Lebenszeichen.
+
+### Begründung
+
+- Die Prüfung beim Zugriff braucht keinen Hintergrunddienst. Tests steuern sie mit einer festen Uhr und brauchen keine vorgetäuschten Timer.
+- Ein Ende ab dem Fristende macht das Ergebnis unabhängig davon, wann jemand abruft. Eine Rückkehr nach zehn Minuten liefert dasselbe Ergebnis wie ein Abruf nach 16 Sekunden.
+- Die Reihenfolge Teilnahme, Fristen, Lebenszeichen hat zwei Gründe. Fremde lösen keine Fristen aus. Eine Rückkehr tilgt keine abgelaufene Abruffrist.
+- Ohne `version`-Erhöhung antwortet das Polling weiter mit 304.
+- Das Dashboard schaut nur nach. Wer dort ist, sitzt nicht im Spiel.
+- Ein fehlender Schatz hat kein Problem, das der Spieler nachbessern kann. Der Klartext sieht dafür das sofortige Legen vor.
+- Verworfen wurde ein `setTimeout` pro Match. Ein Neustart verliert die Timer. Jede Aktion muss dann Timer anlegen und löschen, und Tests brauchen vorgetäuschte Uhren.
+- Verworfen wurde, Folgen ab dem Abruf zu zählen. Das Ergebnis hängt dann vom Zufall des nächsten Abrufs ab.
+
+### Konsequenzen
+
+- Ein Match ohne jeden Zugriff bleibt im Speicher im alten Status. Das ist ohne Folgen, denn jeder Blick darauf trägt die Fristen zuerst nach.
+- Ein neuer Endpunkt für ein Match nutzt `matchHolen` und ist damit automatisch geschützt.
+- Der Status `abgebrochen` tritt auf, wenn keiner bereit ist. Im Modus `computer` kommt das nicht vor, die Logik gilt aber schon für das Duell.
+- `beenden` bekommt den Zeitpunkt des Endes mit. Bei einer Frist ist das ihr Ende.
+
+---
+
+## ADR-029 Ergebnisse in einer JSON-Datei beim Spielende
+
+### Kontext
+
+ADR-014 legt fest, dass der Server Ergebnisse selbst anlegt. Offen waren der Speicherort, der Zeitpunkt des Eintrags und der Schutz vor doppelten Einträgen. Ein Match endet an vielen Stellen: Schatz gefunden, Aufgeben, Zugfrist, Abwesenheit oder Startfrist. Die Match-Schicht arbeitet ohne Dateizugriff (ADR-026).
+
+### Entscheidung
+
+- Die Klasse `ErgebnisSpeicher` in `server/ergebnis/speicher.ts` hält alle Ergebnisse und schreibt sie in `server/data/ergebnisse.json`.
+- Das sichere Schreiben steht in der Klasse `JsonDatei` (`server/jsonDatei.ts`). `NutzerSpeicher` und `ErgebnisSpeicher` nutzen sie beide.
+- `ergebnisseAus(match)` in `server/match/ergebnis.ts` baut einen Eintrag pro Mensch. Der Computer und abgebrochene Matches bekommen keinen.
+- Die Routen rufen `ergebnisseSichern` nach dem Nachtragen der Fristen und vor jeder Antwort auf. `eintragen` erkennt ein schon eingetragenes Match am Paar aus Match-Id und Nutzer-Id und ändert dann nichts.
+- `beendetAm` ist der Zeitpunkt des Spielendes. Bei einer Frist ist es deren Ende.
+- Die Felder `minAnfragen` und `effizienz` aus dem Vertrag fehlen noch. Sie gehören zur offenen Punktevergabe.
+
+### Begründung
+
+- Eine JSON-Datei passt zu den Nutzern (ADR-023). Ergebnisse müssen einen Neustart überstehen, Matches nicht.
+- Ein doppelt sicheres `eintragen` (idempotent) erlaubt viele Aufrufstellen. Kein Ende geht verloren, und kein Match zählt doppelt.
+- Ein Eintrag gleich nach dem Nachtragen der Fristen sichert auch ein Ende, nach dem die Route mit 409 antwortet.
+- Verworfen wurde der Eintrag direkt in `beenden`. Die Match-Schicht braucht dann Dateizugriff und `await`, und reine Tests der Spielabläufe schreiben Dateien.
+- Verworfen wurde ein Merker "Ergebnis gespeichert" im Match. Er ist ein zweiter Zustand neben dem Speicher und kann von ihm abweichen.
+
+### Konsequenzen
+
+- `appErstellen` nimmt optional einen `ErgebnisSpeicher`. Ohne Angabe bleiben Ergebnisse nur im Arbeitsspeicher. Das genügt den meisten Tests.
+- `aufgeben` bekommt die Uhrzeit als Parameter.
+- Die Lese-Endpunkte `/results` und `/results/stats` und die Anzeige im Dashboard folgen in Phase 6. Bis dahin gilt ADR-014 als teilweise umgesetzt.
+- Die Endansicht zeigt die Anfragen beider Spieler. Dafür hat das Schema `Spieler` das Feld `anfragen` bekommen.
+
+---
+
+## ADR-030 Zugfrist erst nach der Wiedergabe des Computerzugs
+
+### Kontext
+
+Der Computer spielt seinen ganzen Zug auf dem Server sofort. Der Client zeigt die Anfragen danach einzeln mit 0,7 Sekunden Pause. So sieht der Spieler den Weg des Computers live, wie es der Klartext verlangt. Mit den Fristen aus ADR-028 entstanden daraus zwei Fehler. Der Server startete die 60 Sekunden des Spielers vor der Wiedergabe. Ein Zug mit 20 Anfragen kostete 14 Sekunden Bedenkzeit. Außerdem rief der Client während der Wiedergabe nicht ab. Ab 22 Anfragen verlor der Spieler wegen Abwesenheit, obwohl er zusah.
+
+### Entscheidung
+
+- Die Pause steht als `WIEDERGABE_PAUSE_MS = 700` in `shared/types.ts`. Client und Server nutzen denselben Wert.
+- Nach dem Zug des Computers setzt der Server `zugEndeAm` auf die Zeit nach der Wiedergabe plus 60 Sekunden. Die Wiedergabe dauert die Zahl der Computer-Anfragen mal 700 Millisekunden.
+- Der Client ruft auch während der Wiedergabe ab. Die Wiedergabe beginnt erst nach dem Abschluss der eigenen Anfrage.
+
+### Begründung
+
+- Der Spieler bekommt seine vollen 60 Sekunden, und der Server bleibt allein für die Frist zuständig.
+- Eine gemeinsame Konstante hält Client und Server gleich. Ändert sich die Pause, ändert sich die Frist mit.
+- Verworfen wurde eine Meldung des Clients am Ende der Wiedergabe. Ein manipulierter Client verzögert sie beliebig und hält damit die Frist an.
+- Verworfen wurde, den Computerzug ohne Wiedergabe sofort zu zeigen. Der Spieler sieht den Weg des Computers dann nicht mehr.
+- Verworfen wurde eine kürzere Pause. Sie verkleinert das Problem, löst es aber nicht.
+
+### Konsequenzen
+
+- Die Beschreibung von `zugEndeAm` im Vertrag nennt die Verlängerung.
+- Nach einem langen Computerzug zeigt der Countdown während der Wiedergabe mehr als 1:00. Am Ende der Wiedergabe steht er bei 1:00.
+- Im Duell gibt es keine Wiedergabe. Die Regel gilt nur nach einem Zug des Computers.
+
+---
+
 ## Offene Punkte und Erweiterungen
 
 Diese Punkte sind bewusst nicht entschieden oder als Erweiterung zurückgestellt.
 
-- Punktevergabe nach Siegen oder nach Anfragen im Vergleich zum Minimum. Das Ergebnis speichert die nötigen Werte bereits.
+- Punktevergabe nach Siegen oder nach Anfragen im Vergleich zum Minimum. Das Ergebnis speichert die Zahl der Anfragen bereits. `minAnfragen` und `effizienz` fehlen noch (ADR-029).
+- Beendete Matches bleiben bis zum Neustart im Arbeitsspeicher. Ein Aufräumen alter Matches fehlt.
 - Turnier mit acht Spielern. Die Mindestzahl für das Auffüllen mit Computern bleibt offen, und der Fall Computer gegen Computer braucht eine Regel.
 - Gemeinsames Eingabefeld für Duell-Codes und Turnier-Codes.
 - Zufälliger Live-Gegner über eine offene Warteschlange.

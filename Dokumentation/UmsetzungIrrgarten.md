@@ -33,18 +33,14 @@ Die Reihenfolge folgt den Abhängigkeiten. Jede Phase endet mit einem spielbaren
 
 # Phase 4: Fristen und Spielende (1 Tag)
 
-- Fristen prüft der Server bei jedem Abruf, ohne eigenen Timer: 3 Minuten Aufbau, 1 Minute Nachbesserung, 30 Sekunden Bereitschaft, 60 Sekunden pro Zug, 15 Sekunden ohne Abruf
-- Automatisches Setzen: Schatz zufällig platzieren, Mauern öffnen
-- Bereitschafts-Overlay, „Aufgeben“, Endansicht mit beiden Labyrinthen und Anfragezahl
-- Ergebnis speichert der Server selbst
-
-**Merkpunkte aus Phase 3 (Stand 16.11.2026)**
-
-- Zwei Fristen nicht verwechseln. Die Zugfrist misst die Bedenkzeit im eigenen Zug (60 Sekunden). Die Abruffrist misst, wie lange der Browser schweigt (15 Sekunden). Der Client fragt alle 1 bis 2 Sekunden von selbst, auch beim Nachdenken. 15 Sekunden ohne Abruf heißen deshalb Tab zu, Netz weg oder Rechner im Ruhezustand.
-- Offene Frage: Bleibt die Zugfrist bei 60 Sekunden? Als Untergrenze für die Bedenkzeit sind 45 Sekunden im Gespräch. Eine Änderung betrifft Klartext, openapi.yaml und ADR-008 (neue ADR, die ADR-008 ersetzt).
-- Fristen prüft der Server erst beim nächsten Zugriff. Im Modus computer ruft nach dem Schließen des Tabs niemand mehr ab. Die Prüfung gehört deshalb in jeden Zugriff auf ein Match: `GET /matches/{id}`, `GET /matches/current` und `POST /matches` vor der 409-Antwort. Sonst sperrt ein verlassenes Match den Nutzer.
-- `GET /matches/current` existiert seit Phase 3. Der Vertrag verspricht dort schon, abgelaufene Fristen vorher nachzutragen.
-- Im Aufbau gilt nur die 3-Minuten-Frist, nicht die Abruffrist. Wer den Tab schließt, findet über das Dashboard zurück und baut weiter.
+- Fristen prüft der Server bei jedem Zugriff, ohne eigenen Timer: 3 Minuten Aufbau, 1 Minute Nachbesserung, 30 Sekunden Bereitschaft, 60 Sekunden pro Zug, 15 Sekunden ohne Abruf (ADR-028). Jede Folge zählt ab dem Fristende.
+- Die Prüfung läuft in jeder Route unter `/matches/{id}`, in `GET /matches/current` und in `POST /matches` vor der 409-Antwort. Ein verlassenes Match sperrt den Nutzer nicht.
+- Automatisches Setzen: Fehlt der Schatz, legt der Server ihn zufällig. Ist er unerreichbar, folgt eine Minute Nachbesserung, danach öffnet der Server markierte Mauern.
+- Status `startbereit` mit Bereitschafts-Overlay und `POST /matches/{id}/ready`. Die Auslosung folgt erst nach der Bestätigung.
+- Countdowns für alle Fristen im Client. Die Zugfrist beginnt nach der Wiedergabe des Computerzugs (ADR-030).
+- Endansicht mit beiden Labyrinthen und den Anfragen beider Spieler. "Abgebrochen" erscheint ohne Sieger.
+- Der Server speichert Ergebnisse selbst in `server/data/ergebnisse.json` (ADR-029). Die Lese-Endpunkte folgen in Phase 6.
+- Die Zugfrist bleibt bei 60 Sekunden. Der Vertrag hat die Felder `zugEndeAm` im Match und `anfragen` im Spieler bekommen.
 
 # Phase 5: Live-Duell (1 Tag)
 
@@ -54,6 +50,7 @@ Die Reihenfolge folgt den Abhängigkeiten. Jede Phase endet mit einem spielbaren
 
 # Phase 6: Dashboard und Ergebnisse (½ Tag)
 
+- `GET /results` und `GET /results/stats` aus dem `ErgebnisSpeicher` (ADR-029)
 - Siege, Niederlagen, Quote, letzte 10 Spiele
 - Ergebnisliste mit aufklappbaren Details
 
