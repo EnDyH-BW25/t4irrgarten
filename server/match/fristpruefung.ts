@@ -1,7 +1,10 @@
 import type { Endegrund } from '../../shared/types.ts'
-import { abbrechen, beenden } from './ablauf.ts'
-import { ABRUF_FRIST_MS } from './fristen.ts'
-import type { MatchIntern } from './typen.ts'
+import { labyrinthVervollstaendigen } from '../spiellogik/automatik.ts'
+import type { Zufall } from '../spiellogik/generator.ts'
+import { loesbarkeitPruefen } from '../spiellogik/regeln.ts'
+import { abbrechen, beenden, startbereitMachen } from './ablauf.ts'
+import { ABRUF_FRIST_MS, NACHBESSERUNG_DAUER_MS } from './fristen.ts'
+import type { MatchIntern, SpielerDaten } from './typen.ts'
 
 /**
  * Trägt alle abgelaufenen Fristen nach. Der Server hat keinen Timer. Jeder Zugriff auf ein Match
@@ -10,9 +13,14 @@ import type { MatchIntern } from './typen.ts'
  * Jede Folge zählt ab dem Fristende, nicht ab jetzt. Ruft lange niemand ab, stimmen so auch
  * Ketten von Fristen: Aufbau vorbei, danach Startfrist vorbei.
  */
-export function fristenPruefen(match: MatchIntern, jetzt: Date): boolean {
+export function fristenPruefen(
+  match: MatchIntern,
+  jetzt: Date,
+  zufall: Zufall = Math.random,
+): boolean {
   const vorher = match.version
   // Reihenfolge wie im Spielablauf. Jede Prüfung kann den Status für die nächste ändern.
+  if (match.status === 'aufbau') aufbaufristPruefen(match, jetzt, zufall)
   if (match.status === 'startbereit') startfristPruefen(match, jetzt)
   if (match.status === 'laeuft') spielfristenPruefen(match, jetzt)
   return match.version !== vorher
@@ -23,6 +31,50 @@ export function abrufMerken(match: MatchIntern, nutzerId: string, jetzt: Date): 
   const spieler = match.spieler.find((s) => s.id === nutzerId)
   // Kein version++: Ein Lebenszeichen ändert nichts, was der Client sieht. Sonst gäbe es nie 304.
   if (spieler) spieler.letzterAbrufAm = jetzt
+}
+
+/**
+ * Aufbau vorbei: Jeder Spieler ohne "Irrgarten setzen" wird gesetzt. Ein lösbarer Entwurf bleibt,
+ * ein fehlender Schatz kommt zufällig dazu. Liegt der Schatz unerreichbar, gibt es eine Minute
+ * Nachbesserung. Danach öffnet der Server Mauern. Stehen alle Labyrinthe, folgt die Bereitschaft.
+ */
+function aufbaufristPruefen(match: MatchIntern, jetzt: Date, zufall: Zufall): void {
+  const aufbauEnde = match.aufbauEndeAm!.getTime()
+  if (jetzt.getTime() < aufbauEnde) return
+
+  // Zeitpunkt, an dem das letzte Labyrinth stand. Ab dort zählt die Startfrist.
+  let gesetztAm = aufbauEnde
+  let geaendert = false
+
+  for (const s of match.spieler) {
+    if (s.gesetzt) continue
+
+    // Schatz liegt, ist aber nicht erreichbar: eine Minute Nachbesserung, einmal pro Spieler
+    if (
+      s.nachbesserungEndeAm === null && s.entwurf.schatz !== null &&
+      !loesbarkeitPruefen(s.entwurf).loesbar
+    ) {
+      s.nachbesserungEndeAm = new Date(aufbauEnde + NACHBESSERUNG_DAUER_MS)
+      geaendert = true
+    }
+
+    if (s.nachbesserungEndeAm !== null) {
+      const ende = s.nachbesserungEndeAm.getTime()
+      if (jetzt.getTime() < ende) continue // Spieler bessert noch nach
+      gesetztAm = Math.max(gesetztAm, ende)
+    }
+    automatischSetzen(s, zufall)
+    geaendert = true
+  }
+
+  if (match.spieler.every((s) => s.gesetzt)) startbereitMachen(match, new Date(gesetztAm))
+  if (geaendert) match.version++
+}
+
+function automatischSetzen(spieler: SpielerDaten, zufall: Zufall): void {
+  spieler.entwurf = labyrinthVervollstaendigen(spieler.entwurf, zufall)
+  spieler.gesetzt = true
+  spieler.nachbesserungEndeAm = null
 }
 
 /** Bereitschaft: Wer bestätigt hat, gewinnt. Hat keiner bestätigt, bricht das Match ab. */

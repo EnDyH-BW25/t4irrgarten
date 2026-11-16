@@ -112,6 +112,8 @@ export function labyrinthSetzen(match: MatchIntern, nutzerId: string, jetzt: Dat
   }
 
   ich.gesetzt = true
+  // Setzt der Spieler während der Nachbesserung selbst, endet sie
+  ich.nachbesserungEndeAm = null
   if (match.spieler.every((s) => s.gesetzt)) startbereitMachen(match, jetzt)
   match.version++
 }

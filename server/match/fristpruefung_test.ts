@@ -7,7 +7,9 @@ import {
   entwurfSpeichern,
   labyrinthSetzen,
 } from './ablauf.ts'
-import { ABRUF_FRIST_MS, START_FRIST_MS, ZUG_FRIST_MS } from './fristen.ts'
+import { loesbarkeitPruefen } from '../spiellogik/regeln.ts'
+import { AUFBAU_DAUER_MS } from './ablauf.ts'
+import { ABRUF_FRIST_MS, NACHBESSERUNG_DAUER_MS, START_FRIST_MS, ZUG_FRIST_MS } from './fristen.ts'
 import { abrufMerken, fristenPruefen } from './fristpruefung.ts'
 import type { MatchIntern } from './typen.ts'
 
@@ -35,6 +37,87 @@ function laufendesMatch(): MatchIntern {
   bereitBestaetigen(match, NUTZER.id, JETZT, ZUERST)
   return match
 }
+
+/** Match im Aufbau; der Mensch hat den Entwurf gespeichert, aber nicht gesetzt */
+function matchImAufbau(entwurf: { schatz: string | null; mauern: string[] }): MatchIntern {
+  const match = computerMatchErstellen(NUTZER, 'standard', JETZT, ZUERST)
+  entwurfSpeichern(match, NUTZER.id, entwurf)
+  return match
+}
+
+const AUFBAU_ENDE = AUFBAU_DAUER_MS
+const NACHBESSERUNG_ENDE = AUFBAU_DAUER_MS + NACHBESSERUNG_DAUER_MS
+
+// ---------- Aufbau ----------
+
+Deno.test('aufbau: vor Ablauf ändert sich nichts', () => {
+  const match = matchImAufbau({ schatz: null, mauern: [] })
+  assertEquals(fristenPruefen(match, nach(AUFBAU_ENDE - 1), ZUERST), false)
+  assertEquals(match.status, 'aufbau')
+})
+
+Deno.test('aufbau: lösbarer Entwurf ohne Klick wird gesetzt, die Startfrist läuft ab Aufbauende', () => {
+  const match = matchImAufbau({ schatz: 'C4', mauern: ['A1_A2'] })
+  // Abruf 5 Sekunden nach Aufbauende: Die Startfrist zählt trotzdem ab dem Aufbauende
+  assertEquals(fristenPruefen(match, nach(AUFBAU_ENDE + 5000), ZUERST), true)
+  assertEquals(match.status, 'startbereit')
+  assertEquals(match.spieler[0].gesetzt, true)
+  assertEquals(match.spieler[0].entwurf, { schatz: 'C4', mauern: ['A1_A2'] })
+  assertEquals(match.startFristEndeAm, nach(AUFBAU_ENDE + START_FRIST_MS))
+})
+
+Deno.test('aufbau: ohne Schatz legt der Server ihn auf eine erreichbare Zelle', () => {
+  const match = matchImAufbau({ schatz: null, mauern: ['A1_A2'] })
+  fristenPruefen(match, nach(AUFBAU_ENDE), ZUERST)
+  assertEquals(match.status, 'startbereit')
+  assert(match.spieler[0].entwurf.schatz !== null)
+  assertEquals(loesbarkeitPruefen(match.spieler[0].entwurf).loesbar, true)
+})
+
+Deno.test('aufbau: unerreichbarer Schatz startet eine Minute Nachbesserung', () => {
+  const match = matchImAufbau({ schatz: 'F6', mauern: ['E6_F6', 'F5_F6'] })
+  assertEquals(fristenPruefen(match, nach(AUFBAU_ENDE), ZUERST), true)
+  assertEquals(match.status, 'aufbau')
+  assertEquals(match.spieler[0].gesetzt, false)
+  assertEquals(match.spieler[0].nachbesserungEndeAm, nach(NACHBESSERUNG_ENDE))
+
+  // Während der Nachbesserung darf der Spieler ändern, ein weiterer Abruf ändert nichts
+  entwurfSpeichern(match, NUTZER.id, { schatz: 'F6', mauern: ['E6_F6'] })
+  assertEquals(fristenPruefen(match, nach(NACHBESSERUNG_ENDE - 1), ZUERST), false)
+})
+
+Deno.test('aufbau: selbst gesetzt während der Nachbesserung, die Startfrist zählt ab dem Klick', () => {
+  const match = matchImAufbau({ schatz: 'F6', mauern: ['E6_F6', 'F5_F6'] })
+  fristenPruefen(match, nach(AUFBAU_ENDE), ZUERST)
+  entwurfSpeichern(match, NUTZER.id, { schatz: 'F6', mauern: ['E6_F6'] })
+  labyrinthSetzen(match, NUTZER.id, nach(AUFBAU_ENDE + 20_000))
+  assertEquals(match.status, 'startbereit')
+  assertEquals(match.spieler[0].nachbesserungEndeAm, null)
+  assertEquals(match.startFristEndeAm, nach(AUFBAU_ENDE + 20_000 + START_FRIST_MS))
+})
+
+Deno.test('aufbau: nach der Nachbesserung öffnet der Server Mauern', () => {
+  const match = matchImAufbau({ schatz: 'F6', mauern: ['A1_A2', 'E6_F6', 'F5_F6'] })
+  fristenPruefen(match, nach(AUFBAU_ENDE), ZUERST)
+  fristenPruefen(match, nach(NACHBESSERUNG_ENDE), ZUERST)
+
+  const { entwurf, nachbesserungEndeAm } = match.spieler[0]
+  assertEquals(match.status, 'startbereit')
+  assertEquals(entwurf.schatz, 'F6')
+  assertEquals(loesbarkeitPruefen(entwurf).loesbar, true)
+  assert(entwurf.mauern.includes('A1_A2'), 'unbeteiligte Mauer geöffnet')
+  assertEquals(nachbesserungEndeAm, null)
+  assertEquals(match.startFristEndeAm, nach(NACHBESSERUNG_ENDE + START_FRIST_MS))
+})
+
+Deno.test('aufbau: Rückkehr nach zehn Minuten trägt die ganze Kette nach', () => {
+  // Tab im Aufbau geschlossen: Aufbau, Nachbesserung und Startfrist laufen ab
+  const match = matchImAufbau({ schatz: 'F6', mauern: ['E6_F6', 'F5_F6'] })
+  assertEquals(fristenPruefen(match, nach(10 * 60_000), ZUERST), true)
+  assertEquals(match.status, 'beendet')
+  assertEquals(match.siegerId, COMPUTER.id)
+  assertEquals(match.endegrund, 'startfrist')
+})
 
 // ---------- Startfrist ----------
 
