@@ -11,11 +11,12 @@ import {
   bereitBestaetigen,
   COMPUTER,
   computerMatchErstellen,
+  duellErstellen,
   entwurfSpeichern,
   labyrinthSetzen,
   teilnehmer,
 } from './ablauf.ts'
-import { START_FRIST_MS, ZUG_FRIST_MS } from './fristen.ts'
+import { CODE_DAUER_MS, START_FRIST_MS, ZUG_FRIST_MS } from './fristen.ts'
 import type { MatchIntern } from './typen.ts'
 
 const NUTZER = { id: 'n1', name: 'Nudl' }
@@ -326,4 +327,19 @@ Deno.test('ganze Partie: endet immer mit einem Sieger, Zähler stimmen', () => {
     const [mensch, computer] = match.spieler
     assertEquals(match.anfrageNr, mensch.anfragen + computer.anfragen + 1)
   }
+})
+
+// ---------- Duell anlegen ----------
+
+Deno.test('duellErstellen: Ersteller wartet allein, Code gilt 10 Minuten', () => {
+  const match = duellErstellen(NUTZER, 'K7M2P', JETZT)
+
+  assertEquals(match.modus, 'duell')
+  assertEquals(match.status, 'wartet')
+  assertEquals(match.schwierigkeit, null)
+  assertEquals(match.code, 'K7M2P')
+  assertEquals(match.codeEndeAm!.getTime() - JETZT.getTime(), CODE_DAUER_MS)
+  assertEquals(match.spieler.map((s) => s.id), [NUTZER.id])
+  // Der Aufbau beginnt erst mit dem Beitritt
+  assertEquals(match.aufbauEndeAm, null)
 })

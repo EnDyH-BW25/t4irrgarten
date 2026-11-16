@@ -14,7 +14,7 @@ import { karteFortschreiben, neueKarte } from '../spiellogik/karte.ts'
 import { istZelle } from '../spiellogik/koordinaten.ts'
 import { entwurfPruefen, loesbarkeitPruefen } from '../spiellogik/regeln.ts'
 import { computerZug } from '../spiellogik/sucher.ts'
-import { START_FRIST_MS, ZUG_FRIST_MS } from './fristen.ts'
+import { CODE_DAUER_MS, START_FRIST_MS, ZUG_FRIST_MS } from './fristen.ts'
 import type { MatchIntern, SpielerDaten } from './typen.ts'
 
 /** Der Computer als Spieler; die Id ist fest, weil es kein Nutzerkonto gibt */
@@ -49,6 +49,35 @@ export function computerMatchErstellen(
     amZug: null,
     anfrageNr: 1,
     aufbauEndeAm: new Date(jetzt.getTime() + AUFBAU_DAUER_MS),
+    startFristEndeAm: null,
+    zugEndeAm: null,
+    siegerId: null,
+    endegrund: null,
+    beendetAm: null,
+  }
+}
+
+/**
+ * Legt ein Duell an. Der Ersteller wartet allein im Warteraum, bis jemand mit dem Code beitritt.
+ * Den Code erzeugt der Aufrufer, weil nur der MatchSpeicher weiß, welche Codes vergeben sind.
+ */
+export function duellErstellen(
+  nutzer: Pick<Nutzer, 'id' | 'name'>,
+  code: string,
+  jetzt: Date,
+): MatchIntern {
+  return {
+    id: crypto.randomUUID(),
+    version: 1,
+    modus: 'duell',
+    schwierigkeit: null, // gilt nur gegen den Computer
+    status: 'wartet',
+    code,
+    codeEndeAm: new Date(jetzt.getTime() + CODE_DAUER_MS),
+    spieler: [spielerAnlegen(nutzer.id, nutzer.name, false, jetzt)],
+    amZug: null,
+    anfrageNr: 1,
+    aufbauEndeAm: null, // der Aufbau beginnt erst mit dem Beitritt
     startFristEndeAm: null,
     zugEndeAm: null,
     siegerId: null,

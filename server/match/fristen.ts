@@ -1,3 +1,6 @@
+/** Gültigkeit des Spielcodes im Warteraum (ADR-009) */
+export const CODE_DAUER_MS = 10 * 60 * 1000
+
 /** Zusatzzeit, wenn der Schatz bei Ende des Aufbaus nicht erreichbar ist */
 export const NACHBESSERUNG_DAUER_MS = 60 * 1000
 

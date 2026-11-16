@@ -1,5 +1,5 @@
 import { assertEquals, assertStrictEquals } from '@std/assert'
-import { computerMatchErstellen } from './ablauf.ts'
+import { computerMatchErstellen, duellErstellen } from './ablauf.ts'
 import { MatchSpeicher } from './speicher.ts'
 
 const JETZT = new Date('2026-11-15T10:00:00Z')
@@ -62,4 +62,22 @@ Deno.test('offenesMatchVon: neben alten Matches findet es das offene', () => {
   speicher.anlegen(alt)
   speicher.anlegen(neu)
   assertStrictEquals(speicher.offenesMatchVon('n1'), neu)
+})
+
+Deno.test('nachCode: findet nur ein wartendes Duell mit genau diesem Code', () => {
+  const speicher = new MatchSpeicher()
+  const duell = duellErstellen(NUDL, 'K7M2P', JETZT)
+  speicher.anlegen(duell)
+
+  assertStrictEquals(speicher.nachCode('K7M2P'), duell)
+  assertEquals(speicher.nachCode('ABCDE'), null)
+  // Nach dem Beitritt ist das Match nicht mehr im Status wartet: Der Code gilt nicht mehr
+  duell.status = 'aufbau'
+  assertEquals(speicher.nachCode('K7M2P'), null)
+})
+
+Deno.test('offenesMatchVon: ein wartendes Duell zählt als offen', () => {
+  const speicher = new MatchSpeicher()
+  speicher.anlegen(duellErstellen(NUDL, 'K7M2P', JETZT))
+  assertEquals(speicher.offenesMatchVon(NUDL.id)?.status, 'wartet')
 })

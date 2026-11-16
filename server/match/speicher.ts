@@ -14,6 +14,14 @@ export class MatchSpeicher {
     return this.matches.get(id) ?? null
   }
 
+  /** Liefert das wartende Duell mit diesem Code oder null. Nach dem Beitritt gilt der Code nicht mehr. */
+  nachCode(code: string): MatchIntern | null {
+    for (const match of this.matches.values()) {
+      if (match.status === 'wartet' && match.code === code) return match
+    }
+    return null
+  }
+
   /** Liefert das Match, in dem der Nutzer gerade spielt; beendete und abgebrochene zählen nicht */
   offenesMatchVon(nutzerId: string): MatchIntern | null {
     for (const match of this.matches.values()) {
