@@ -1,3 +1,9 @@
+/**
+ * MATCH-AUFRUFE (dünne Hülle um api.ts)
+ * Jede Funktion entspricht genau einem Endpunkt aus openapi.yaml.
+ * Die Views rufen diese Funktionen auf statt selbst Pfade zusammenzubauen.
+ * Spielzüge (Labyrinth speichern, Anfragen, Polling) ruft SpielView direkt über api.ts auf.
+ */
 import type { Match, Schwierigkeit } from '@shared/types.ts'
 import { ApiFehler, get, post } from '@/api'
 
@@ -16,7 +22,10 @@ export function beitreten(code: string): Promise<Match> {
   return post<Match>('/matches/join', { code })
 }
 
-/** Liefert das offene Match oder null, wenn es keines gibt */
+/**
+ * Liefert das offene Match oder null, wenn es keines gibt
+ * Das Dashboard ruft das zuerst auf. Der Abruf prüft auf dem Server auch die Fristen (ADR-028).
+ */
 export async function offenesMatch(): Promise<Match | null> {
   try {
     return await get<Match>('/matches/current')
@@ -27,7 +36,7 @@ export async function offenesMatch(): Promise<Match | null> {
   }
 }
 
-/** Gibt das Match auf */
+/** Gibt das Match auf (im Warteraum bricht das das Duell ab) */
 export function aufgeben(id: string): Promise<Match> {
   return post<Match>(`/matches/${id}/resign`)
 }

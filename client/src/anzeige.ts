@@ -1,3 +1,10 @@
+/**
+ * ANZEIGE-TEXTE: übersetzt Werte aus dem Vertrag in deutsche Texte für die Oberfläche
+ * Trennung: Der Server liefert maschinenlesbare Werte ('laeuft', 'nurBis'),
+ * diese Datei macht daraus Text ('Spiel läuft'). So bleibt der Vertrag sprachneutral.
+ * Record<Schlüsseltyp, Werttyp>: TypeScript meldet einen Fehler, wenn ein Schlüssel fehlt.
+ * Kommt also ein neuer Status dazu, erinnert der Compiler an den fehlenden Text.
+ */
 import type {
   AnfrageErgebnis,
   Endegrund,
@@ -24,7 +31,11 @@ export const STATUS_TEXT: Record<MatchStatus, string> = {
   abgebrochen: 'Abgebrochen',
 }
 
-/** Antwort auf eine Anfrage in Worten */
+/**
+ * Antwort auf eine Anfrage in Worten
+ * Die vier Antworten der Spielregel: ja (bis zum Ziel gekommen), nurBis (Mauer unterwegs),
+ * nein (Mauer direkt vor der Figur), schatzGefunden (Spiel gewonnen).
+ */
 export function antwortText(a: AnfrageErgebnis): string {
   switch (a.ergebnis) {
     case 'ja':
@@ -39,6 +50,7 @@ export function antwortText(a: AnfrageErgebnis): string {
 }
 
 /** Farbe des Antwort-Etiketts in der Anfragebox; volle Klassennamen, damit Tailwind sie findet */
+// Tailwind sucht Klassennamen als Text im Code. Zusammengesetzte Namen ('bg-' + farbe) fände es nicht.
 export const ANTWORT_FARBE: Record<AnfrageErgebnis['ergebnis'], string> = {
   ja: 'bg-green-100 text-green-800',
   nurBis: 'bg-amber-100 text-amber-900',
@@ -53,7 +65,7 @@ export const ENDEGRUND_TEXT: Record<Endegrund, string> = {
   abwesenheit: 'Verbindung abgebrochen',
   zugfrist: 'Zugzeit überschritten',
   startfrist: 'Nicht rechtzeitig bereit',
-  walkover: 'Kampflos',
+  walkover: 'Kampflos', // Turnier: Gegner aus Runde 1 fehlt, der andere kommt kampflos weiter
 }
 
 /** Quote als ganze Prozentzahl, z. B. 0.666 => "67 %" */
@@ -62,6 +74,7 @@ export function quoteText(quote: number): string {
 }
 
 /** Zeitpunkt in deutscher Kurzform in der Zeitzone des Browsers, z. B. "16.11.26, 11:00" */
+// Der Server speichert UTC (ISO-String). Erst hier wird daraus deutsche Ortszeit.
 export function datumText(iso: string): string {
   return new Date(iso).toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' })
 }
@@ -76,6 +89,6 @@ export function gegnerText(e: Ergebnis): string {
 /** Kurzer Stand eines Turniers, z. B. "Warteraum · 3 von 4 Spielern" oder "Runde 2 läuft" */
 export function turnierStandText(t: Turnier): string {
   if (t.status === 'wartet') return `Warteraum · ${t.teilnehmer.length} von ${t.groesse} Spielern`
-  if (t.status === 'laeuft') return `Runde ${t.runden.length} läuft`
+  if (t.status === 'laeuft') return `Runde ${t.runden.length} läuft` // Anzahl Runden = aktuelle Runde
   return t.status === 'beendet' ? 'Beendet' : 'Abgebrochen'
 }
