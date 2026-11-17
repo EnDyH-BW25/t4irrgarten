@@ -21,6 +21,11 @@ export function routerErstellen(history: RouterHistory) {
         component: () => import('@/views/DashboardView.vue'),
       },
       {
+        path: '/ergebnisse',
+        name: 'ergebnisse',
+        component: () => import('@/views/ErgebnisseView.vue'),
+      },
+      {
         // props: true gibt :id als Prop an die View, statt dass sie die Route selbst liest
         path: '/spiel/:id',
         name: 'spiel',

@@ -288,6 +288,15 @@ onMounted(laden)
           </span>
         </li>
       </ul>
+      <!-- Vollständige Liste mit Details auf eigener Seite (Klartext, Abschnitt Ergebnisse) -->
+      <button
+        type="button"
+        data-test="ergebnisse"
+        class="mt-3 w-full rounded bg-slate-200 px-3 py-2"
+        @click="router.push('/ergebnisse')"
+      >
+        Ergebnisse
+      </button>
     </div>
   </section>
 </template>

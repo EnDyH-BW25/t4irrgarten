@@ -31,6 +31,7 @@ async function aufbauen() {
     routes: [
       { path: '/dashboard', component: DashboardView },
       { path: '/spiel/:id', component: { template: '<p>Spiel</p>' } },
+      { path: '/ergebnisse', component: { template: '<p>Ergebnisse</p>' } },
     ],
   })
   router.push('/dashboard')
@@ -288,6 +289,14 @@ describe('DashboardView', () => {
       expect(zeilen[0]!.text()).toContain('Niederlage')
       expect(zeilen[1]!.text()).toContain('Computer (Schwer)')
       expect(zeilen[1]!.text()).toContain('Sieg')
+    })
+
+    it('der Button Ergebnisse öffnet die vollständige Liste', async () => {
+      dashboardServer({ '/api/matches/current': keinMatch })
+      const { wrapper, router } = await aufbauen()
+      await wrapper.find('[data-test=ergebnisse]').trigger('click')
+      await flushPromises()
+      expect(router.currentRoute.value.path).toBe('/ergebnisse')
     })
 
     it('ohne Spiele steht ein Hinweis statt einer leeren Liste', async () => {
