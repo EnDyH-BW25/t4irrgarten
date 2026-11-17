@@ -45,6 +45,8 @@ export function computerMatchErstellen(
     status: 'aufbau',
     code: null,
     codeEndeAm: null,
+    competitionId: null, // ein Turnier setzt beides nach dem Erstellen
+    runde: null,
     spieler: [mensch, computer],
     amZug: null,
     anfrageNr: 1,
@@ -74,6 +76,8 @@ export function duellErstellen(
     status: 'wartet',
     code,
     codeEndeAm: new Date(jetzt.getTime() + CODE_DAUER_MS),
+    competitionId: null,
+    runde: null,
     spieler: [spielerAnlegen(nutzer.id, nutzer.name, false, jetzt)],
     amZug: null,
     anfrageNr: 1,

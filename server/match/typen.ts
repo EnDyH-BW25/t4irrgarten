@@ -32,6 +32,8 @@ export type MatchIntern = {
   status: MatchStatus
   code: string | null // Spielcode des Duells, nur im Status wartet gesetzt
   codeEndeAm: Date | null // Ende der Gültigkeit des Codes, nur im Status wartet gesetzt
+  competitionId: string | null // nur bei Matches eines Turniers gesetzt
+  runde: number | null // Runde im Turnier, sonst null
   spieler: SpielerDaten[] // im Status wartet nur der Ersteller
   amZug: string | null // Id des Spielers, der Anfragen stellen darf; im Aufbau niemand
   anfrageNr: number // Nummer der nächsten erwarteten Anfrage, beginnt bei 1

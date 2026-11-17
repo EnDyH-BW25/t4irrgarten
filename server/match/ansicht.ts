@@ -29,7 +29,7 @@ export function ansichtFuer(match: MatchIntern, nutzerId: string, jetzt: Date): 
     // Im Status wartet ist nur der Ersteller Teilnehmer. Nur er sieht den Code.
     code: match.code,
     codeEndeAm: match.codeEndeAm?.toISOString() ?? null,
-    competitionId: null,
+    competitionId: match.competitionId,
     spieler: match.spieler.map((s) => ({
       id: s.id,
       name: s.name,

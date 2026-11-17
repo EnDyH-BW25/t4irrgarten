@@ -30,7 +30,9 @@ info:
     - Der Host legt die Competition an und gibt den Spielcode weiter. Die Teilnehmer treten mit dem Code bei und sehen den Warteraum.
     - Der Host startet ab 3 Teilnehmern. Fehlt der vierte Spieler, ergänzt der Server einen Computer-Spieler mit der Schwierigkeit, die der Host beim Anlegen angibt. Es spielt höchstens ein Computer mit.
     - Jedes Match hat einen eigenen Aufbau. Wer ein Match verlässt oder per Frist verliert, verliert auch alle folgenden Matches der Competition. Der Gegner gewinnt kampflos (`walkover`).
-    - Erscheint in einem Match keiner der beiden Spieler, endet die Competition ohne Wertung (`abgebrochen`).
+    - Erscheint in einem Match keiner der beiden Spieler, endet die Competition ohne Wertung (`abgebrochen`). Das gilt auch, wenn beide Spieler einer Paarung in Runde 2 schon in Runde 1 per Aufgabe oder Frist verloren haben.
+    - Runde 2 legt der Server beim nächsten Abruf der Competition an, sobald beide Matches der Runde 1 enden. Einen Timer gibt es nicht.
+    - Während einer Competition im Status `wartet` oder `laeuft` startet der Teilnehmer kein anderes Match und keine zweite Competition (409).
     - Der Code verfällt nach 30 Minuten ohne Start. Verlässt der Host den Warteraum, endet die Competition.
 servers:
   - url: http://localhost:8000/api
@@ -524,6 +526,25 @@ paths:
                 fehler:
                   code: COMPETITION_VOLL
                   nachricht: Die Competition hat keinen freien Platz mehr.
+
+  /competitions/current:
+    get:
+      tags: [Competitions]
+      summary: Eigene offene Competition abrufen
+      description: |
+        Liefert die Competition im Status `wartet` oder `laeuft`, an der der Nutzer teilnimmt. Damit findet das Dashboard ein Turnier wieder, auch zwischen zwei Runden.
+        Abgelaufene Fristen und fällige Runden trägt der Server vorher nach.
+      responses:
+        '200':
+          description: Offene Competition aus Sicht des Nutzers
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Competition'
+        '401':
+          $ref: '#/components/responses/NichtAngemeldet'
+        '404':
+          $ref: '#/components/responses/NichtGefunden'
 
   /competitions/{id}:
     parameters:
@@ -1158,11 +1179,15 @@ components:
 
     Competition:
       type: object
-      required: [id, groesse, status, hostId, teilnehmer, runden]
+      required: [id, serverZeit, groesse, status, hostId, teilnehmer, runden]
       properties:
         id:
           type: string
           format: uuid
+        serverZeit:
+          type: string
+          format: date-time
+          description: Uhrzeit des Servers zum Zeitpunkt der Antwort. Basis für den Countdown des Codes.
         groesse:
           type: integer
           enum: [4]
@@ -1184,6 +1209,11 @@ components:
             - $ref: '#/components/schemas/Code'
           nullable: true
           description: Spielcode. Nur der Host sieht ihn und nur im Status `wartet`.
+        codeEndeAm:
+          type: string
+          format: date-time
+          nullable: true
+          description: Ende der Gültigkeit des Codes (30 Minuten nach dem Anlegen). Nur für den Host und nur im Status `wartet` gesetzt. Danach bricht der Server die Competition ab.
         teilnehmer:
           type: array
           description: Im Warteraum die beigetretenen Spieler, nach dem Start inklusive Computer-Spieler

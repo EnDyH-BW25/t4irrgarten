@@ -148,6 +148,59 @@ export type Match = {
 /** Anfrage zum Anlegen eines Matches; die Schwierigkeit gibt es nur im Modus computer */
 export type MatchAnlegen = { modus: 'computer'; schwierigkeit: Schwierigkeit } | { modus: 'duell' }
 
+/** Status eines Turniers; ein Turnier kennt keinen Aufbau, den haben seine Matches */
+export type TurnierStatus = 'wartet' | 'laeuft' | 'beendet' | 'abgebrochen'
+
+/** Ein Match im Turnierplan (BracketMatch in der openapi.yaml) */
+export type Paarung = {
+  matchId: string
+  spielerA: Spieler
+  spielerB: Spieler
+  status: MatchStatus
+  siegerId: string | null
+  platzUm: number[] // Runde 1 leer, Runde 2 [1, 2] oder [3, 4]
+}
+
+/** Eine Runde mit ihren Paarungen */
+export type Runde = {
+  nr: number
+  matches: Paarung[]
+}
+
+/** Endplatz eines Spielers */
+export type Platzierung = {
+  platz: number
+  spieler: Spieler
+}
+
+/** Stand eines Turniers aus Sicht eines Teilnehmers (Competition in der openapi.yaml) */
+export type Turnier = {
+  id: string
+  serverZeit: string // Basis für den Countdown des Codes
+  groesse: number // heute immer TURNIER_GROESSE
+  schwierigkeit: Schwierigkeit // Labyrinthe des Computer-Spielers
+  status: TurnierStatus
+  hostId: string
+  code: string | null // nur für den Host im Status wartet
+  codeEndeAm: string | null // nur für den Host im Status wartet
+  teilnehmer: Spieler[] // nach dem Start mit Computer-Spieler
+  runden: Runde[]
+  platzierungen: Platzierung[] // erst gefüllt, wenn das Turnier beendet ist
+  meinNaechstesMatchId: string | null // offenes Match des Nutzers in diesem Turnier
+}
+
+/** Anfrage zum Anlegen eines Turniers (CompetitionCreate in der openapi.yaml) */
+export type TurnierAnlegen = {
+  groesse: number
+  schwierigkeit: Schwierigkeit
+}
+
+/** Spieler pro Turnier; ein Turnier mit acht Spielern ist eine spätere Erweiterung (ADR-010) */
+export const TURNIER_GROESSE = 4
+
+/** Ab so vielen Menschen darf der Host starten; der Rest wird mit dem Computer aufgefüllt */
+export const TURNIER_MIN_START = 3
+
 /** Eingabe einer Anfrage (QueryRequest in der openapi.yaml) */
 export type AnfrageEingabe = {
   anfrageNr: number // schützt vor Doppelklick und erneutem Senden
