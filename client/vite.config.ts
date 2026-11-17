@@ -20,6 +20,8 @@ export default defineConfig({
     },
   },
   server: {
+    // Auch im WLAN erreichbar, z. B. vom Handy über http://<IP-des-Macs>:5173
+    host: true,
     proxy: { 
       '/api': 'http://localhost:8000' 
     }
