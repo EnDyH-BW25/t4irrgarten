@@ -72,3 +72,18 @@ Deno.test('ergebnisSpeicher: Statistik zählt nur eigene Spiele', async () => {
   ])
   assertEquals(speicher.statistik('n1'), { siege: 3, niederlagen: 1, quote: 0.75 })
 })
+
+Deno.test('ergebnisSpeicher: Platzierung landet in allen Ergebnissen des Turniers', () =>
+  mitTempOrdner(async (pfad) => {
+    const speicher = await ErgebnisSpeicher.laden(pfad)
+    await speicher.eintragen([
+      eintrag({ matchId: 'r1', competitionId: 't1', runde: 1 }),
+      eintrag({ matchId: 'r2', competitionId: 't1', runde: 2 }),
+      eintrag({ matchId: 'x', competitionId: null }), // gehört zu keinem Turnier
+    ])
+    await speicher.platzierungEintragen('t1', [{ platz: 2, spielerId: 'n1' }])
+
+    const neu = await ErgebnisSpeicher.laden(pfad) // auch in der Datei angekommen
+    const plaetze = neu.vonNutzer('n1').map((e) => [e.matchId, e.platzierung])
+    assertEquals(plaetze.sort(), [['r1', 2], ['r2', 2], ['x', null]])
+  }))

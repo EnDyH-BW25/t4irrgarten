@@ -35,6 +35,26 @@ export class ErgebnisSpeicher {
     await this.datei?.schreiben(this.eintraege)
   }
 
+  /**
+   * Trägt nach dem Turnierende den Endplatz in alle Ergebnisse des Turniers ein. Die Ergebnisse
+   * der Matches stehen schon da. Ein zweiter Aufruf ändert nichts und schreibt nicht.
+   */
+  async platzierungEintragen(
+    competitionId: string,
+    platzierungen: { platz: number; spielerId: string }[],
+  ): Promise<void> {
+    let geaendert = false
+    for (const e of this.eintraege) {
+      if (e.competitionId !== competitionId) continue
+      const platz = platzierungen.find((p) => p.spielerId === e.nutzerId)?.platz ?? null
+      if (e.platzierung !== platz) {
+        e.platzierung = platz
+        geaendert = true
+      }
+    }
+    if (geaendert) await this.datei?.schreiben(this.eintraege)
+  }
+
   /** Ergebnisse eines Nutzers, neueste zuerst */
   vonNutzer(nutzerId: string): Ergebnis[] {
     return this.eintraege
