@@ -47,6 +47,9 @@ Die Reihenfolge folgt den Abhängigkeiten. Jede Phase endet mit einem spielbaren
 - Spielcode erzeugen (5 Zeichen ohne 0, O, 1, I), Warteraum, Ablauf nach 10 Minuten
 - Beitreten per Code, gemeinsamer Timer, Live-Sicht auf die Anfragen des Gegners
 - Verbindungsverlust erkennen: 15 Sekunden ohne Abruf zählen als Niederlage
+- Umgesetzt: `POST /matches` mit `modus: duell` und `POST /matches/join`. Der Warteraum ist der Status `wartet` der Spielansicht mit Countdown aus `codeEndeAm` (ADR-032).
+- Die Live-Sicht nutzt das neue Feld `gegnerAnfragen` und zeigt es im Duell als Kasten über den Spielfeldern (ADR-031).
+- Fristen, Abruffrist, Auslosung und Ergebnisse aus Phase 4 gelten ohne Änderung auch für zwei Menschen.
 
 # Phase 6: Dashboard und Ergebnisse (½ Tag)
 

@@ -1,6 +1,6 @@
 # Architecture Decision Records Irrgarten
 
-Stand 16.11.2026. Das Format folgt dem Mini-ADR aus dem Skript mit Kontext, Entscheidung, Begründung und Konsequenzen.
+Stand 17.11.2026. Das Format folgt dem Mini-ADR aus dem Skript mit Kontext, Entscheidung, Begründung und Konsequenzen.
 
 Die Datei sammelt alle Entscheidungen des Projekts nach Thema. Eine akzeptierte ADR bleibt unverändert. Ändert sich eine Entscheidung, entsteht eine neue ADR. Die alte erhält den Status "Ersetzt durch ADR-0XX".
 
@@ -21,7 +21,7 @@ Die Übersicht trennt zwei Angaben.
 | ADR-006 | Aufbauphase unter Kontrolle des Servers             | Planung     | Akzeptiert | teilweise |
 | ADR-007 | Lösbarkeitsprüfung mit Nachbesserung                | Planung     | Akzeptiert | umgesetzt |
 | ADR-008 | Bereitschaftsprüfung und Abwesenheit                | Planung     | Akzeptiert | umgesetzt |
-| ADR-009 | Spielcode für das Duell                             | Planung     | Akzeptiert | geplant   |
+| ADR-009 | Spielcode für das Duell                             | Planung     | Akzeptiert | umgesetzt |
 | ADR-010 | Turnier mit Host, Warteraum und Computer-Auffüllung | Planung     | Akzeptiert | geplant   |
 | ADR-011 | Turnierablauf, Ausstieg und Abbruch                 | Planung     | Akzeptiert | geplant   |
 | ADR-012 | Aktualisierung per Polling                          | Planung     | Akzeptiert | teilweise |
@@ -43,6 +43,8 @@ Die Übersicht trennt zwei Angaben.
 | ADR-028 | Fristen ohne Timer bei jedem Zugriff                | 4           | Akzeptiert | umgesetzt |
 | ADR-029 | Ergebnisse in einer JSON-Datei beim Spielende       | 4           | Akzeptiert | umgesetzt |
 | ADR-030 | Zugfrist erst nach der Wiedergabe des Computerzugs  | 4           | Akzeptiert | umgesetzt |
+| ADR-031 | Live-Sicht über die Anfrageliste des Gegners        | 5           | Akzeptiert | umgesetzt |
+| ADR-032 | Warteraum als Status der Spielansicht               | 5           | Akzeptiert | umgesetzt |
 
 ---
 
@@ -938,6 +940,64 @@ Der Computer spielt seinen ganzen Zug auf dem Server sofort. Der Client zeigt di
 - Die Beschreibung von `zugEndeAm` im Vertrag nennt die Verlängerung.
 - Nach einem langen Computerzug zeigt der Countdown während der Wiedergabe mehr als 1:00. Am Ende der Wiedergabe steht er bei 1:00.
 - Im Duell gibt es keine Wiedergabe. Die Regel gilt nur nach einem Zug des Computers.
+
+---
+
+## ADR-031 Live-Sicht über die Anfrageliste des Gegners
+
+### Kontext
+
+Der Klartext verlangt, dass der Gegner meine Anfragen und die Antworten live sieht. Bis Phase 4 kannte der Client vom Gegner nur seine Karte (`gegnerKarte`) mit Position, besuchten Zellen und entdeckten Mauern. Daraus lässt sich die Spur zeichnen, aber nicht jede Anfrage mit ihrer Antwort. Gegen den Computer löst die Wiedergabe das Problem (ADR-030). Im Duell gibt es keine Wiedergabe. Der Client erfährt den Zug des Gegners nur über das Polling alle 1,5 Sekunden. In dieser Zeit stellt der Gegner oft mehrere Anfragen.
+
+### Entscheidung
+
+- Der Server speichert pro Spieler die Liste aller Anfragen mit Antwort (`verlauf`). `anfrageEintragen` hängt jede Anfrage an, beim Menschen wie beim Computer.
+- Das Match enthält das Feld `gegnerAnfragen` mit der ganzen Liste des Gegners, älteste zuerst. Im Status `wartet` ist es `null`.
+- Der Client zeigt die Liste im Duell in einem eigenen Kasten über den Spielfeldern, neueste Anfrage oben. Der Kasten sieht aus wie das Bereitschafts-Overlay, dunkelt die Seite aber nicht ab.
+
+### Begründung
+
+- Die ganze Liste kommt mit jedem geänderten Stand. Der Client verpasst keine Anfrage, auch nicht nach dem Neuladen oder bei mehreren Anfragen zwischen zwei Abrufen.
+- Die Liste verrät nichts Geheimes. Sie enthält nur Mauern, die der Gegner in meinem Labyrinth schon entdeckt hat.
+- Verworfen wurde, die Anfragen aus der Änderung der `gegnerKarte` abzuleiten. Bei mehreren Anfragen zwischen zwei Abrufen fehlen Ziel und Antwort der mittleren.
+- Verworfen wurde ein eigener Endpunkt nur für neue Anfragen. Er braucht einen zweiten Abruf pro Takt und eine eigene Zählung, was der Client schon kennt.
+- Verworfen wurde, nur die Spur zu zeigen. Sie erfüllt den Klartext nur halb.
+
+### Konsequenzen
+
+- Der Vertrag hat das Feld `gegnerAnfragen` bekommen.
+- Die Antwort wächst mit jeder Anfrage. Bei höchstens einigen Dutzend Anfragen pro Spiel spielt das keine Rolle.
+- Gegen den Computer liefert der Server das Feld auch. Der Client zeigt dort weiter die Wiedergabe und keinen Kasten.
+
+---
+
+## ADR-032 Warteraum als Status der Spielansicht
+
+### Kontext
+
+Nach "Spiel erstellen" wartet der Ersteller, bis sein Freund mit dem Code beitritt (ADR-009). Der Klartext verlangt einen Warteraum mit Code und der Möglichkeit abzubrechen. Der Code verfällt nach zehn Minuten.
+
+### Entscheidung
+
+- Der Warteraum ist keine eigene Seite. Die Spielansicht `/spiel/:id` zeigt ihn im Status `wartet` statt der Spielfelder.
+- Der Warteraum zeigt den Code, eine Anleitung für den Gegner und die Restzeit aus dem neuen Feld `codeEndeAm`. "Abbrechen" ruft `POST /matches/{id}/resign` auf. Im Status `wartet` bricht der Server das Match ohne Ergebnis ab.
+- Den Ablauf des Codes prüft der Server bei jedem Zugriff wie alle anderen Fristen (ADR-028). Danach ist das Match `abgebrochen`.
+- Im Warteraum gibt es keine Abruffrist. Schließt der Ersteller den Tab, verfällt der Code nach zehn Minuten.
+- Der Server normiert den Code. Groß- und Kleinschreibung sowie Leerzeichen am Rand spielen keine Rolle.
+
+### Begründung
+
+- Das Polling der Spielansicht erkennt den Beitritt am Wechsel auf `aufbau`. Ein eigener Abruf für den Warteraum entfällt.
+- "Fortsetzen" im Dashboard führt ohne Sonderfall zurück in den Warteraum.
+- Verworfen wurde eine eigene Seite für den Warteraum. Sie braucht ein zweites Polling und einen Seitenwechsel beim Beitritt.
+- Verworfen wurde eine Abruffrist im Warteraum. Ohne Gegner verliert niemand etwas, und die zehn Minuten räumen das Duell ohnehin ab.
+- Der Countdown zeigt dem Ersteller, wie lange sein Freund noch Zeit hat.
+
+### Konsequenzen
+
+- Der Vertrag hat das Feld `codeEndeAm` bekommen.
+- Ein wartendes Duell zählt als offenes Match. Der Ersteller startet kein zweites Spiel, bis er abbricht oder der Code verfällt.
+- Ein abgebrochenes Match mit nur einem Spieler zeigt "Niemand ist beigetreten" statt "Keiner war rechtzeitig bereit".
 
 ---
 
