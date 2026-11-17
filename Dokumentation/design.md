@@ -44,3 +44,4 @@ Jeder Irrgarten bleibt in einer Farbfamilie. Mein Irrgarten ist ganz blau, der g
 - Ich im gegnerischen Irrgarten: ghost-2 (IconGhost2), weil mir das Labyrinth unbekannt ist
 - Gegner in meinem Irrgarten: robot (IconRobot)
 - Plättchen: keine Icons, abgerundete Quadrate in den Farben oben
+- Favicon: ghost-2 gefüllt (IconGhost2Filled) in orange-600, Apple-Touch-Icon auf orange-100
