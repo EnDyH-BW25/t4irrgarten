@@ -56,6 +56,9 @@ Die Reihenfolge folgt den Abhängigkeiten. Jede Phase endet mit einem spielbaren
 - `GET /results` und `GET /results/stats` aus dem `ErgebnisSpeicher` (ADR-029)
 - Siege, Niederlagen, Quote, letzte 10 Spiele
 - Ergebnisliste mit aufklappbaren Details
+- Umgesetzt: `server/ergebnis/routen.ts` liefert Seiten über `limit` und `offset` und die Statistik. Die Quote rechnet der Server.
+- Das Dashboard zeigt drei Kacheln und die letzten 10 Spiele. Es lädt sie erst nach dem offenen Match (ADR-033).
+- Die Ergebnisseite `/ergebnisse` lädt 20 Einträge pro Klick auf "Mehr laden". `minAnfragen` und `effizienz` bleiben offen.
 
 # Phase 7: Turnier (1,5 Tage)
 

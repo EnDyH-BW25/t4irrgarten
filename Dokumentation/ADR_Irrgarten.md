@@ -26,7 +26,7 @@ Die Übersicht trennt zwei Angaben.
 | ADR-011 | Turnierablauf, Ausstieg und Abbruch                 | Planung     | Akzeptiert | geplant   |
 | ADR-012 | Aktualisierung per Polling                          | Planung     | Akzeptiert | teilweise |
 | ADR-013 | Kein Gastmodus                                      | Planung     | Akzeptiert | umgesetzt |
-| ADR-014 | Ergebnisse vom Server, Statistik statt Rangliste    | Planung     | Akzeptiert | teilweise |
+| ADR-014 | Ergebnisse vom Server, Statistik statt Rangliste    | Planung     | Akzeptiert | umgesetzt |
 | ADR-015 | Dashboard, Schwierigkeit und Einstellungen          | Planung     | Akzeptiert | teilweise |
 | ADR-016 | Technologie-Stack                                   | Einrichtung | Akzeptiert | umgesetzt |
 | ADR-017 | Gemeinsame Typen im Ordner shared                   | 0           | Akzeptiert | umgesetzt |
@@ -45,6 +45,7 @@ Die Übersicht trennt zwei Angaben.
 | ADR-030 | Zugfrist erst nach der Wiedergabe des Computerzugs  | 4           | Akzeptiert | umgesetzt |
 | ADR-031 | Live-Sicht über die Anfrageliste des Gegners        | 5           | Akzeptiert | umgesetzt |
 | ADR-032 | Warteraum als Status der Spielansicht               | 5           | Akzeptiert | umgesetzt |
+| ADR-033 | Ergebnisse seitenweise und nach dem offenen Match   | 6           | Akzeptiert | umgesetzt |
 
 ---
 
@@ -998,6 +999,38 @@ Nach "Spiel erstellen" wartet der Ersteller, bis sein Freund mit dem Code beitri
 - Der Vertrag hat das Feld `codeEndeAm` bekommen.
 - Ein wartendes Duell zählt als offenes Match. Der Ersteller startet kein zweites Spiel, bis er abbricht oder der Code verfällt.
 - Ein abgebrochenes Match mit nur einem Spieler zeigt "Niemand ist beigetreten" statt "Keiner war rechtzeitig bereit".
+
+---
+
+## ADR-033 Ergebnisse seitenweise und nach dem offenen Match
+
+### Kontext
+
+Der Klartext verlangt im Dashboard Siege, Niederlagen, Quote und die letzten zehn Spiele. Der Button "Ergebnisse" öffnet die vollständige Liste. Der Vertrag bietet dafür `GET /results` mit `limit` und `offset` und `GET /results/stats`. Die Liste wächst mit jedem Spiel. Der Server prüft Fristen nur bei einem Zugriff auf das Match (ADR-028). Ein Match, das durch Zeitablauf endete, hat erst nach diesem Zugriff ein Ergebnis.
+
+### Entscheidung
+
+- Der Server liefert eine Seite der Ergebnisse, die neuesten zuerst. `limit` gilt von 1 bis 100 mit 10 als Vorgabe, `offset` ab 0. Andere Werte beantwortet er mit 400 `VALIDIERUNG`.
+- Das Dashboard lädt die letzten 10 Spiele. Die Ergebnisseite `/ergebnisse` lädt 20 Einträge pro Klick auf "Mehr laden".
+- Kommt eine Seite kürzer als angefragt zurück, ist die Liste zu Ende. Der Button verschwindet.
+- Lädt die Ergebnisseite einen Eintrag doppelt, lässt der Client ihn weg. Das passiert, wenn zwischen zwei Seiten ein Spiel endet.
+- Das Dashboard ruft zuerst `/matches/current` auf und danach Statistik und Liste. Nach "Aufgeben" lädt es alles neu.
+- Die Details eines Spiels klappt das HTML-Element `<details>` auf.
+
+### Begründung
+
+- Seiten halten jede Antwort klein, egal wie viele Spiele jemand gespielt hat.
+- Verworfen wurde die ganze Liste in einer Antwort. Sie wächst ohne Grenze.
+- Verworfen wurden nummerierte Seiten. Dafür braucht die Antwort die Gesamtzahl der Einträge, und der Vertrag sieht sie nicht vor. "Mehr laden" kommt ohne sie aus.
+- Der Abruf von `/matches/current` trägt abgelaufene Fristen nach. Danach steht das Ergebnis eines gerade beendeten Matches schon in der Statistik.
+- Verworfen wurde eine Fristprüfung in `/results`. Die Ergebnis-Routen bräuchten dann den Match-Speicher und die Fristlogik.
+- `<details>` klappt ohne eigenen Zustand in Vue auf und bedient sich mit der Tastatur.
+
+### Konsequenzen
+
+- Der Server hat eigene Routen in `server/ergebnis/routen.ts`. Sie lesen nur.
+- Ruft jemand `/ergebnisse` direkt auf, ohne vorher das Dashboard zu öffnen, fehlt ein Match, das seit dem letzten Abruf durch Zeitablauf endete. Beim nächsten Besuch des Dashboards erscheint es.
+- Endet zwischen zwei Seiten ein Spiel, erscheint es erst nach dem Neuladen der Seite. Doppelte Einträge entstehen nicht.
 
 ---
 
