@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import type { Match, Schwierigkeit } from '@shared/types.ts'
+import type { Ergebnis, Match, Schwierigkeit, Statistik } from '@shared/types.ts'
 import { ApiFehler } from '@/api'
 import { nutzer } from '@/anmeldung'
-import { SCHWIERIGKEITEN, STATUS_TEXT } from '@/anzeige'
+import { SCHWIERIGKEITEN, STATUS_TEXT, datumText, gegnerText, quoteText } from '@/anzeige'
+import { ergebnisseLaden, statistikLaden } from '@/ergebnisse'
 import { aufgeben, beitreten, duellAnlegen, matchAnlegen, offenesMatch } from '@/matches'
 
 const router = useRouter()
@@ -28,11 +29,20 @@ function fehlerZeigen(e: unknown) {
   meldung.value = e instanceof ApiFehler ? e.message : 'Unbekannter Fehler.'
 }
 
+/** Statistik und letzte Spiele; null, solange sie nicht geladen sind */
+const statistik = ref<Statistik | null>(null)
+const letzte = ref<Ergebnis[]>([])
+
 async function laden() {
   laedt.value = true
   meldung.value = null
   try {
+    // Erst das offene Match: Der Abruf trägt abgelaufene Fristen nach (ADR-028).
+    // Endete dabei ein Match, steht sein Ergebnis danach schon in der Statistik.
     laufend.value = await offenesMatch()
+    const [s, l] = await Promise.all([statistikLaden(), ergebnisseLaden()])
+    statistik.value = s
+    letzte.value = l
   } catch (e) {
     fehlerZeigen(e)
   } finally {
@@ -81,7 +91,7 @@ function duellBeitreten() {
 const codeVollstaendig = computed(() => code.value.trim().length === 5)
 
 /** Gegner des offenen Matches in Worten */
-const gegnerText = computed(() => {
+const laufendGegner = computed(() => {
   const m = laufend.value
   if (!m) return ''
   if (m.status === 'wartet') return 'Duell im Warteraum'
@@ -96,7 +106,8 @@ async function laufendesAufgeben() {
   meldung.value = null
   try {
     await aufgeben(laufend.value.id)
-    laufend.value = null
+    // Neu laden: Die Niederlage steht jetzt in Statistik und Liste
+    await laden()
   } catch (e) {
     fehlerZeigen(e)
   } finally {
@@ -128,7 +139,7 @@ onMounted(laden)
     <div v-else-if="laufend" data-test="laufend" class="rounded-lg bg-white p-4 shadow">
       <h2 class="font-titel text-lg">Laufendes Spiel</h2>
       <p class="mt-1 text-sm text-slate-600">
-        {{ gegnerText }} · {{ STATUS_TEXT[laufend.status] }}
+        {{ laufendGegner }} · {{ STATUS_TEXT[laufend.status] }}
       </p>
       <div class="mt-3 grid grid-cols-2 gap-2">
         <button
@@ -234,6 +245,49 @@ onMounted(laden)
       {{ meldung }}
     </p>
 
-    <p class="text-sm text-slate-500">Statistik und Ergebnisse folgen in Phase 6.</p>
+    <!-- Statistik: Der Server rechnet, das Dashboard zeigt nur an (ADR-014) -->
+    <div v-if="statistik" data-test="statistik" class="grid grid-cols-3 gap-2 text-center">
+      <div class="rounded-lg bg-white p-3 shadow">
+        <p class="font-titel text-2xl" data-test="siege">{{ statistik.siege }}</p>
+        <p class="text-sm text-slate-600">Siege</p>
+      </div>
+      <div class="rounded-lg bg-white p-3 shadow">
+        <p class="font-titel text-2xl" data-test="niederlagen">{{ statistik.niederlagen }}</p>
+        <p class="text-sm text-slate-600">Niederlagen</p>
+      </div>
+      <div class="rounded-lg bg-white p-3 shadow">
+        <p class="font-titel text-2xl" data-test="quote">{{ quoteText(statistik.quote) }}</p>
+        <p class="text-sm text-slate-600">Quote</p>
+      </div>
+    </div>
+
+    <!-- Letzte 10 Spiele, neueste zuerst -->
+    <div v-if="statistik" class="rounded-lg bg-white p-4 shadow">
+      <h2 class="font-titel text-lg">Letzte Spiele</h2>
+      <p v-if="letzte.length === 0" data-test="keine-spiele" class="mt-1 text-sm text-slate-600">
+        Noch keine Spiele beendet.
+      </p>
+      <ul v-else class="mt-2 divide-y divide-slate-100">
+        <li
+          v-for="e in letzte"
+          :key="e.id"
+          data-test="letztes-spiel"
+          class="flex items-center justify-between gap-2 py-2 text-sm"
+        >
+          <span class="min-w-0">
+            <span class="block truncate">{{ gegnerText(e) }}</span>
+            <span class="text-slate-500">{{ datumText(e.beendetAm) }}</span>
+          </span>
+          <span
+            class="shrink-0 rounded px-2 py-0.5"
+            :class="
+              e.ausgang === 'sieg' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+            "
+          >
+            {{ e.ausgang === 'sieg' ? 'Sieg' : 'Niederlage' }}
+          </span>
+        </li>
+      </ul>
+    </div>
   </section>
 </template>
