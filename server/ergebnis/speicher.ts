@@ -1,4 +1,4 @@
-import type { Ergebnis } from '../../shared/types.ts'
+import type { Ergebnis, Statistik } from '../../shared/types.ts'
 import { JsonDatei } from '../jsonDatei.ts'
 
 /** Ergebnis mit dem Nutzer, dem es gehört; verlässt den Server nur ohne nutzerId */
@@ -41,6 +41,17 @@ export class ErgebnisSpeicher {
       .filter((e) => e.nutzerId === nutzerId)
       .sort((a, b) => b.beendetAm.localeCompare(a.beendetAm))
       .map(alsErgebnis)
+  }
+
+  /** Zählt Siege und Niederlagen eines Nutzers. Ohne Spiele ist die Quote 0 statt 0 / 0. */
+  statistik(nutzerId: string): Statistik {
+    const eigene = this.eintraege.filter((e) => e.nutzerId === nutzerId)
+    const siege = eigene.filter((e) => e.ausgang === 'sieg').length
+    return {
+      siege,
+      niederlagen: eigene.length - siege,
+      quote: eigene.length === 0 ? 0 : siege / eigene.length,
+    }
   }
 }
 

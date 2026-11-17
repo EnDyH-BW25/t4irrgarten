@@ -179,6 +179,13 @@ export type Ergebnis = {
   beendetAm: string
 }
 
+/** Siege, Niederlagen und Quote eines Nutzers; der Server rechnet, der Client zeigt nur an */
+export type Statistik = {
+  siege: number
+  niederlagen: number
+  quote: number // siege / (siege + niederlagen), bei 0 Spielen 0
+}
+
 /**
  * Pause zwischen zwei Anfragen des Computers bei der Wiedergabe im Client. Der Server verlängert
  * um diese Zeit pro Anfrage die Zugfrist danach, damit die Wiedergabe keine Bedenkzeit kostet.

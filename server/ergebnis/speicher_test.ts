@@ -55,3 +55,20 @@ Deno.test('ergebnisSpeicher: nur eigene Ergebnisse, neueste zuerst, ohne nutzerI
     assertEquals(liste.map((e) => e.matchId), ['neu', 'alt'])
     assertEquals('nutzerId' in liste[0], false)
   }))
+
+Deno.test('ergebnisSpeicher: Statistik ohne Spiele hat Quote 0', () => {
+  const speicher = ErgebnisSpeicher.imSpeicher()
+  assertEquals(speicher.statistik('n1'), { siege: 0, niederlagen: 0, quote: 0 })
+})
+
+Deno.test('ergebnisSpeicher: Statistik zählt nur eigene Spiele', async () => {
+  const speicher = ErgebnisSpeicher.imSpeicher()
+  await speicher.eintragen([
+    eintrag({ matchId: 'a' }),
+    eintrag({ matchId: 'b' }),
+    eintrag({ matchId: 'c', ausgang: 'niederlage' }),
+    eintrag({ matchId: 'd' }),
+    eintrag({ matchId: 'fremd', nutzerId: 'n2', ausgang: 'niederlage' }),
+  ])
+  assertEquals(speicher.statistik('n1'), { siege: 3, niederlagen: 1, quote: 0.75 })
+})
