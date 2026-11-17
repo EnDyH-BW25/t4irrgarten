@@ -2,8 +2,11 @@ import { assert, assertEquals, assertThrows } from '@std/assert'
 import { ApiFehler } from '../fehler.ts'
 import {
   anfrageStellen,
+  aufgeben,
+  beitreten,
   bereitBestaetigen,
   computerMatchErstellen,
+  duellErstellen,
   entwurfSpeichern,
   labyrinthSetzen,
 } from './ablauf.ts'
@@ -132,4 +135,15 @@ Deno.test('ansicht: nach Spielende ist das Labyrinth des Gegners sichtbar', () =
 Deno.test('ansicht: fremder Nutzer erhält 403', () => {
   const fehler = assertThrows(() => ansichtFuer(matchImAufbau(), 'fremd', JETZT), ApiFehler)
   assertEquals(fehler.status, 403)
+})
+
+Deno.test('ansicht: Aufgabe im Aufbau ohne gesetztes Labyrinth zeigt keins statt 500', () => {
+  // Fehler aus Phase 5: gesetztesLabyrinth warf hier, die Ansicht des Siegers brach ab
+  const match = duellErstellen(NUTZER, 'K7M2P', JETZT)
+  beitreten(match, { id: 'n2', name: 'Ben' }, JETZT)
+  aufgeben(match, NUTZER.id, JETZT)
+
+  const ansicht = ansichtFuer(match, 'n2', JETZT)
+  assertEquals([ansicht.status, ansicht.siegerId], ['beendet', 'n2'])
+  assertEquals(ansicht.gegnerLabyrinth, null)
 })

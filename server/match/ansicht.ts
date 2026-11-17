@@ -57,6 +57,9 @@ export function ansichtFuer(match: MatchIntern, nutzerId: string, jetzt: Date): 
     // Ende
     siegerId: match.siegerId,
     endegrund: match.endegrund,
-    gegnerLabyrinth: match.status === 'beendet' && gegner ? gesetztesLabyrinth(gegner) : null,
+    // Wer im Aufbau aufgibt oder kampflos verliert, hat kein gesetztes Labyrinth
+    gegnerLabyrinth: match.status === 'beendet' && gegner?.gesetzt
+      ? gesetztesLabyrinth(gegner)
+      : null,
   }
 }
