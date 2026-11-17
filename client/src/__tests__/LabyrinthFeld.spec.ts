@@ -50,14 +50,37 @@ describe('LabyrinthFeld', () => {
     expect(w.find('[data-test=zelle-F6] [data-test=schatz]').exists()).toBe(true)
     expect(w.find('[data-test=figur][data-zelle=B2]').exists()).toBe(true)
     expect(w.findAll('[data-test=besucht]')).toHaveLength(2)
-    expect(w.find('[data-test=besucht]').classes()).toContain('bg-blue-600')
+    expect(w.find('[data-test=besucht]').classes()).toContain('bg-blue-400')
+    expect(w.find('[data-test=roboter]').exists()).toBe(true)
   })
 
   it('nutzt beim Gegner die Farben aus design.md', () => {
     const w = feld({ art: 'gegner', mauern: ['A1_A2'], besucht: ['A1'] })
     expect(w.find('[data-test=zelle-A1]').classes()).toContain('bg-orange-300')
     expect(w.find('[data-test=mauer-A1_A2]').classes()).toContain('bg-orange-600')
-    expect(w.find('[data-test=besucht]').classes()).toContain('bg-orange-600')
+    expect(w.find('[data-test=besucht]').classes()).toContain('bg-orange-400')
+  })
+
+  it('zeigt im gegnerischen Irrgarten mich als Geist', () => {
+    const w = feld({ art: 'gegner', figur: 'B2' })
+    expect(w.find('[data-test=geist]').exists()).toBe(true)
+    expect(w.find('[data-test=roboter]').exists()).toBe(false)
+  })
+
+  it('rückt Schatz und Figur auseinander, wenn beide auf einem Feld stehen', () => {
+    const w = feld({ art: 'gegner', schatz: 'C3', figur: 'C3' })
+    const schatz = w.find('[data-test=zelle-C3] [data-test=schatz]').element.parentElement!
+    expect(schatz.className).toContain('-translate-x-[24%]')
+    expect(schatz.className).toContain('scale-75')
+    const figur = w.find('[data-test=geist]').classes()
+    expect(figur).toContain('translate-x-[14%]')
+    expect(figur).not.toContain('scale-75')
+  })
+
+  it('lässt Schatz und Figur mittig, solange sie auf verschiedenen Feldern stehen', () => {
+    const w = feld({ art: 'gegner', schatz: 'C3', figur: 'C2' })
+    expect(w.find('[data-test=schatz]').element.parentElement!.className).not.toContain('scale-75')
+    expect(w.find('[data-test=geist]').classes()).not.toContain('translate-x-[14%]')
   })
 
   it('zeichnet Plättchen in beiden Irrgärten gleich groß', () => {

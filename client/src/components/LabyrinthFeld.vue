@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { IconDiamond, IconGhost2, IconRobot } from '@tabler/icons-vue'
 import type { Mauer, Zelle } from '@shared/types.ts'
 import { SPALTEN, zelle, ZEILEN } from '@/brett'
 
@@ -76,8 +77,23 @@ const zelleKlickbar = (z: Zelle) => props.bearbeitbar || ziele.value.has(z)
 
 // Farben aus design.md; volle Klassennamen, damit Tailwind sie findet
 const feldFarbe = computed(() => (props.art === 'eigen' ? 'bg-blue-300' : 'bg-orange-300'))
-// Mauern und Plättchen teilen sich eine Farbe, so wirkt jedes Feld aus einem Guss
 const mauerFarbe = computed(() => (props.art === 'eigen' ? 'bg-blue-600' : 'bg-orange-600'))
+// Plättchen in der Farbfamilie des Feldes, aber nur eine Stufe dunkler als der Hintergrund
+const plaettchenFarbe = computed(() => (props.art === 'eigen' ? 'bg-blue-400' : 'bg-orange-400'))
+
+/**
+ * Wer läuft hier? Im eigenen Irrgarten sucht der Gegner (Roboter).
+ * Im gegnerischen Irrgarten bin ich der Geist, denn das Labyrinth ist mir unbekannt.
+ */
+const figurIcon = computed(() => (props.art === 'eigen' ? IconRobot : IconGhost2))
+
+/**
+ * Steht die Figur auf dem Schatz, rücken beide auseinander.
+ * Der Schatz schrumpft auf 75 % und geht in die Ecke oben links.
+ * Die Figur behält ihre Größe und rückt in die Ecke unten rechts.
+ * translate in Prozent bezieht sich auf das Icon selbst, das 3/4 des Feldes breit ist.
+ */
+const aufSchatz = computed(() => props.figur !== null && props.figur === props.schatz)
 
 function mauerKlasse(m: Mauer): string {
   if (!gesetzt.value.has(m)) return props.bearbeitbar ? 'hover:bg-slate-400/60' : ''
@@ -152,20 +168,25 @@ const figurLage = computed(() => {
           v-if="besucht.has(z.name)"
           data-test="besucht"
           class="absolute inset-[18%] rounded-sm"
-          :class="mauerFarbe"
+          :class="plaettchenFarbe"
         />
       </Transition>
       <Transition name="schatz">
-        <span v-if="schatz === z.name" class="relative flex h-1/2 w-1/2">
-          <!-- Steht die Figur auf dem Schatz, pulsiert ein Ring um ihn -->
-          <span
+        <span
+          v-if="schatz === z.name"
+          class="relative flex h-3/4 w-3/4 transition-transform duration-300"
+          :class="aufSchatz ? '-translate-x-[24%] -translate-y-[24%] scale-75' : ''"
+        >
+          <!-- Steht die Figur auf dem Schatz, pulsiert eine Kopie des Diamanten -->
+          <IconDiamond
             v-if="figur === z.name"
             data-test="schatz-gefunden"
-            class="absolute inset-0 rotate-45 rounded-sm bg-cyan-300 motion-safe:animate-ping"
+            class="absolute inset-0 h-full w-full text-cyan-300 motion-safe:animate-ping"
           />
-          <span
+          <IconDiamond
             data-test="schatz"
-            class="relative h-full w-full rotate-45 rounded-sm bg-cyan-300 ring-2 ring-cyan-600"
+            stroke="2.5"
+            class="relative h-full w-full text-cyan-300 drop-shadow-[0_0_1px_rgb(15_23_42)]"
           />
         </span>
       </Transition>
@@ -199,7 +220,13 @@ const figurLage = computed(() => {
           class="figur absolute flex items-center justify-center"
           :style="figurLage"
         >
-          <span class="h-1/2 w-1/2 rounded-full bg-slate-900 shadow-md" />
+          <component
+            :is="figurIcon"
+            :data-test="art === 'eigen' ? 'roboter' : 'geist'"
+            stroke="1.75"
+            class="h-3/4 w-3/4 text-slate-900 transition-transform duration-300"
+            :class="aufSchatz ? 'translate-x-[14%] translate-y-[14%]' : ''"
+          />
         </span>
       </Transition>
     </div>

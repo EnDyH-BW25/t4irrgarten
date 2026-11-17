@@ -14,13 +14,15 @@
 
 ## Spielelemente
 
-Jeder Irrgarten bleibt in einer Farbfamilie. Mein Irrgarten ist ganz blau, der gegnerische ganz orange. Mauern und Plättchen haben dieselbe Farbe.
+Jeder Irrgarten bleibt in einer Farbfamilie. Mein Irrgarten ist ganz blau, der gegnerische ganz orange. Die Plättchen liegen eine Stufe über dem Feld, damit sie sich abheben, ohne zu dominieren.
 
-- Mauern und Plättchen meines Irrgartens, den mein Gegner erkundet: blue-600
-- Mauern und Plättchen des gegnerischen Irrgartens, den ich erkunde: orange-600
+- Mauern meines Irrgartens, den mein Gegner erkundet: blue-600
+- Plättchen meines Irrgartens: blue-400
+- Mauern des gegnerischen Irrgartens, den ich erkunde: orange-600
+- Plättchen des gegnerischen Irrgartens: orange-400
 - Plättchen: in beiden Irrgärten gleich groß, 18 % Abstand zum Feldrand
 - Schatz: cyan-300
-- Spielfigur: slate-900
+- Spielfiguren: slate-900
 
 ## Animationen
 
@@ -28,7 +30,7 @@ Jeder Irrgarten bleibt in einer Farbfamilie. Mein Irrgarten ist ganz blau, der g
 - Neue Plättchen springen kurz auf
 - Neu entdeckte Mauern blenden in 300 ms ein
 - Schatz taucht mit einer Drehung auf, etwa beim Aufdecken nach Spielende
-- Steht die Figur auf dem Schatz, pulsiert ein Ring um ihn
+- Steht die Figur auf dem Schatz, rücken beide auseinander: Schatz oben links und auf 75 % verkleinert, Figur in voller Größe unten rechts. Eine Kopie des Diamanten pulsiert.
 - Ergebniskasten, Warteraum und Bereitschafts-Dialog zoomen beim Erscheinen herein
 - Bei "Bewegung reduzieren" im Betriebssystem sind alle Animationen aus
 
@@ -36,8 +38,7 @@ Jeder Irrgarten bleibt in einer Farbfamilie. Mein Irrgarten ist ganz blau, der g
 
 => von tablericons
 
-- Schatz: diamond.svg
-- Spielfigur ich: robot.svg
-- Spielfigur Gegner: ghost-2.svg
-- Plättchen für bekannte Felder, die mein Gegner in meinem Irrgarten bereits erkundet hat: Tailwind blue-600
-- Plättchen für bekannte Felder, die ich im gegnerischen Irrgarten bereits erkundet habe: Tailwind orange-600
+- Schatz: diamond (IconDiamond)
+- Ich im gegnerischen Irrgarten: ghost-2 (IconGhost2), weil mir das Labyrinth unbekannt ist
+- Gegner in meinem Irrgarten: robot (IconRobot)
+- Plättchen: keine Icons, abgerundete Quadrate in den Farben oben
