@@ -18,6 +18,7 @@ const props = withDefaults(
     besucht?: Zelle[]
     bearbeitbar?: boolean // Aufbau: Mauern und Felder klickbar
     ziele?: Zelle[] // Spiel: nur diese Felder sind als Ziel einer Anfrage klickbar
+    anfrageZiel?: Zelle | null // Spiel: Ziel der offenen Anfrage, blinkt bis zur Antwort
   }>(),
   {
     markierteMauern: () => [],
@@ -26,6 +27,7 @@ const props = withDefaults(
     besucht: () => [],
     bearbeitbar: false,
     ziele: () => [],
+    anfrageZiel: null,
   },
 )
 
@@ -162,6 +164,12 @@ const figurLage = computed(() => {
       :style="lage(z)"
       @click="emit('zelle', z.name)"
     >
+      <!-- Ziel der offenen Anfrage: blinkender Rahmen, bis die Antwort kommt -->
+      <span
+        v-if="anfrageZiel === z.name"
+        data-test="anfrageziel"
+        class="absolute inset-0 rounded-sm ring-4 ring-slate-900 ring-inset motion-safe:animate-pulse"
+      />
       <!-- Plättchen: Größe relativ zum Feld, damit es in beiden Irrgärten gleich wirkt -->
       <Transition name="plaettchen">
         <span

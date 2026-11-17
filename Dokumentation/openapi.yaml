@@ -1018,7 +1018,7 @@ components:
           type: string
           format: date-time
           nullable: true
-          description: Ende der Zugfrist für den Spieler in `amZug`. Nur im Status `laeuft` gesetzt. Jede Anfrage startet die Frist neu. Bei einem Zugwechsel gilt sie für den neuen Spieler. Nach dem Zug des Computers beginnt sie erst nach der Wiedergabe im Client (700 ms pro Anfrage des Computers).
+          description: Ende der Zugfrist für den Spieler in `amZug`. Nur im Status `laeuft` gesetzt. Jede Anfrage startet die Frist neu. Bei einem Zugwechsel gilt sie für den neuen Spieler. Nach dem Zug des Computers beginnt sie erst nach der Wiedergabe im Client (`WIEDERGABE_PAUSE_MS` = 3600 ms pro Anfrage des Computers plus einmal für die eigene Anfrage davor, ADR-037).
         ich:
           $ref: '#/components/schemas/Bereitschaft'
         gegner:

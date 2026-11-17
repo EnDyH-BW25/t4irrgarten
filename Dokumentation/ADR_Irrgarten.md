@@ -11,44 +11,46 @@ Die Übersicht trennt zwei Angaben.
 
 ## Übersicht
 
-| Nr      | Titel                                               | Phase       | Status     | Umsetzung |
-| ------- | --------------------------------------------------- | ----------- | ---------- | --------- |
-| ADR-001 | Anwendungsfälle in Klartext vor dem API-Vertrag     | Planung     | Akzeptiert | umgesetzt |
-| ADR-002 | Server als Schiedsrichter                           | Planung     | Akzeptiert | umgesetzt |
-| ADR-003 | Koordinaten und Mauermodell                         | Planung     | Akzeptiert | umgesetzt |
-| ADR-004 | Labyrinth-Generierung und Schwierigkeit             | Planung     | Akzeptiert | umgesetzt |
-| ADR-005 | Anfragen entlang von Zeile oder Spalte              | Planung     | Akzeptiert | umgesetzt |
-| ADR-006 | Aufbauphase unter Kontrolle des Servers             | Planung     | Akzeptiert | teilweise |
-| ADR-007 | Lösbarkeitsprüfung mit Nachbesserung                | Planung     | Akzeptiert | umgesetzt |
-| ADR-008 | Bereitschaftsprüfung und Abwesenheit                | Planung     | Akzeptiert | umgesetzt |
-| ADR-009 | Spielcode für das Duell                             | Planung     | Akzeptiert | umgesetzt |
-| ADR-010 | Turnier mit Host, Warteraum und Computer-Auffüllung | Planung     | Akzeptiert | umgesetzt |
-| ADR-011 | Turnierablauf, Ausstieg und Abbruch                 | Planung     | Akzeptiert | umgesetzt |
-| ADR-012 | Aktualisierung per Polling                          | Planung     | Akzeptiert | teilweise |
-| ADR-013 | Kein Gastmodus                                      | Planung     | Akzeptiert | umgesetzt |
-| ADR-014 | Ergebnisse vom Server, Statistik statt Rangliste    | Planung     | Akzeptiert | umgesetzt |
-| ADR-015 | Dashboard, Schwierigkeit und Einstellungen          | Planung     | Akzeptiert | teilweise |
-| ADR-016 | Technologie-Stack                                   | Einrichtung | Akzeptiert | umgesetzt |
-| ADR-017 | Gemeinsame Typen im Ordner shared                   | 0           | Akzeptiert | umgesetzt |
-| ADR-018 | Einheitliches Fehlerformat im Server                | 0           | Akzeptiert | umgesetzt |
-| ADR-019 | API-Modul im Client mit Netzwerkfehler              | 0           | Akzeptiert | umgesetzt |
-| ADR-020 | Vite-Proxy statt CORS                               | 0           | Akzeptiert | umgesetzt |
-| ADR-021 | Mauern als normierte Strings und reine Funktionen   | 1           | Akzeptiert | umgesetzt |
-| ADR-022 | Passwort-Hash mit PBKDF2                            | 2           | Akzeptiert | umgesetzt |
-| ADR-023 | Sessions im Speicher und Nutzer in JSON-Datei       | 2           | Akzeptiert | umgesetzt |
-| ADR-024 | Anmeldezustand im Client und geschützte Routen      | 2           | Akzeptiert | umgesetzt |
-| ADR-025 | Schatzplatzierung nach Schwierigkeit des Wegs       | 3           | Akzeptiert | umgesetzt |
-| ADR-026 | Match-Schicht im Speicher mit eigener Ansicht       | 3           | Akzeptiert | umgesetzt |
-| ADR-027 | Offenes Match und Schwierigkeit im Account          | 3           | Akzeptiert | umgesetzt |
-| ADR-028 | Fristen ohne Timer bei jedem Zugriff                | 4           | Akzeptiert | umgesetzt |
-| ADR-029 | Ergebnisse in einer JSON-Datei beim Spielende       | 4           | Akzeptiert | umgesetzt |
-| ADR-030 | Zugfrist erst nach der Wiedergabe des Computerzugs  | 4           | Akzeptiert | umgesetzt |
-| ADR-031 | Live-Sicht über die Anfrageliste des Gegners        | 5           | Akzeptiert | umgesetzt |
-| ADR-032 | Warteraum als Status der Spielansicht               | 5           | Akzeptiert | umgesetzt |
-| ADR-033 | Ergebnisse seitenweise und nach dem offenen Match   | 6           | Akzeptiert | umgesetzt |
-| ADR-034 | Turnier als Hülle um normale Matches                | 7           | Akzeptiert | umgesetzt |
-| ADR-035 | Ausscheiden, Walkover und Abbruch im Turnier        | 7           | Akzeptiert | umgesetzt |
-| ADR-036 | Turnierseite als Warteraum und Wartebildschirm      | 7           | Akzeptiert | umgesetzt |
+| Nr      | Titel                                               | Phase       | Status                                   | Umsetzung |
+| ------- | --------------------------------------------------- | ----------- | ---------------------------------------- | --------- |
+| ADR-001 | Anwendungsfälle in Klartext vor dem API-Vertrag     | Planung     | Akzeptiert                               | umgesetzt |
+| ADR-002 | Server als Schiedsrichter                           | Planung     | Akzeptiert                               | umgesetzt |
+| ADR-003 | Koordinaten und Mauermodell                         | Planung     | Akzeptiert                               | umgesetzt |
+| ADR-004 | Labyrinth-Generierung und Schwierigkeit             | Planung     | Akzeptiert                               | umgesetzt |
+| ADR-005 | Anfragen entlang von Zeile oder Spalte              | Planung     | Akzeptiert                               | umgesetzt |
+| ADR-006 | Aufbauphase unter Kontrolle des Servers             | Planung     | Akzeptiert                               | teilweise |
+| ADR-007 | Lösbarkeitsprüfung mit Nachbesserung                | Planung     | Akzeptiert                               | umgesetzt |
+| ADR-008 | Bereitschaftsprüfung und Abwesenheit                | Planung     | Akzeptiert                               | umgesetzt |
+| ADR-009 | Spielcode für das Duell                             | Planung     | Akzeptiert                               | umgesetzt |
+| ADR-010 | Turnier mit Host, Warteraum und Computer-Auffüllung | Planung     | Akzeptiert                               | umgesetzt |
+| ADR-011 | Turnierablauf, Ausstieg und Abbruch                 | Planung     | Akzeptiert                               | umgesetzt |
+| ADR-012 | Aktualisierung per Polling                          | Planung     | Akzeptiert                               | teilweise |
+| ADR-013 | Kein Gastmodus                                      | Planung     | Akzeptiert                               | umgesetzt |
+| ADR-014 | Ergebnisse vom Server, Statistik statt Rangliste    | Planung     | Akzeptiert                               | umgesetzt |
+| ADR-015 | Dashboard, Schwierigkeit und Einstellungen          | Planung     | Akzeptiert                               | teilweise |
+| ADR-016 | Technologie-Stack                                   | Einrichtung | Akzeptiert                               | umgesetzt |
+| ADR-017 | Gemeinsame Typen im Ordner shared                   | 0           | Akzeptiert                               | umgesetzt |
+| ADR-018 | Einheitliches Fehlerformat im Server                | 0           | Akzeptiert                               | umgesetzt |
+| ADR-019 | API-Modul im Client mit Netzwerkfehler              | 0           | Akzeptiert                               | umgesetzt |
+| ADR-020 | Vite-Proxy statt CORS                               | 0           | Akzeptiert                               | umgesetzt |
+| ADR-021 | Mauern als normierte Strings und reine Funktionen   | 1           | Akzeptiert                               | umgesetzt |
+| ADR-022 | Passwort-Hash mit PBKDF2                            | 2           | Akzeptiert                               | umgesetzt |
+| ADR-023 | Sessions im Speicher und Nutzer in JSON-Datei       | 2           | Akzeptiert                               | umgesetzt |
+| ADR-024 | Anmeldezustand im Client und geschützte Routen      | 2           | Akzeptiert                               | umgesetzt |
+| ADR-025 | Schatzplatzierung nach Schwierigkeit des Wegs       | 3           | Akzeptiert                               | umgesetzt |
+| ADR-026 | Match-Schicht im Speicher mit eigener Ansicht       | 3           | Akzeptiert                               | umgesetzt |
+| ADR-027 | Offenes Match und Schwierigkeit im Account          | 3           | Akzeptiert                               | umgesetzt |
+| ADR-028 | Fristen ohne Timer bei jedem Zugriff                | 4           | Akzeptiert                               | umgesetzt |
+| ADR-029 | Ergebnisse in einer JSON-Datei beim Spielende       | 4           | Akzeptiert                               | umgesetzt |
+| ADR-030 | Zugfrist erst nach der Wiedergabe des Computerzugs  | 4           | Akzeptiert, Pause geändert durch ADR-037 | umgesetzt |
+| ADR-031 | Live-Sicht über die Anfrageliste des Gegners        | 5           | Akzeptiert                               | umgesetzt |
+| ADR-032 | Warteraum als Status der Spielansicht               | 5           | Akzeptiert                               | umgesetzt |
+| ADR-033 | Ergebnisse seitenweise und nach dem offenen Match   | 6           | Akzeptiert                               | umgesetzt |
+| ADR-034 | Turnier als Hülle um normale Matches                | 7           | Akzeptiert                               | umgesetzt |
+| ADR-035 | Ausscheiden, Walkover und Abbruch im Turnier        | 7           | Akzeptiert                               | umgesetzt |
+| ADR-036 | Turnierseite als Warteraum und Wartebildschirm      | 7           | Akzeptiert                               | umgesetzt |
+| ADR-037 | Anfragebox mit Anfrage vor der Antwort              | 8           | Akzeptiert                               | umgesetzt |
+| ADR-038 | Ausblick: Antwort durch den Gegner                  | 8           | Vorgeschlagen                            | geplant   |
 
 ---
 
@@ -1128,9 +1130,89 @@ Der Klartext verlangt einen Warteraum mit Namen und Anzahl, einen Startknopf nur
 
 ---
 
+## ADR-037 Anfragebox mit Anfrage vor der Antwort
+
+### Kontext
+
+Im ersten Durchlauf im Browser fielen zwei Schwächen auf. Anfragen waren kaum wahrnehmbar. Die Antwort kam fast gleichzeitig mit dem Klick, und die Figur sprang sofort weiter. Außerdem trennte der Text Anfrage und Antwort nicht klar. Der Verlauf zeigte Einträge wie "Computer: C3, Nur bis C2". Im Duell sah der Spieler die Anfragen des Gegners nur als Liste im Live-Kasten, auf dem Feld sprang die Figur alle 1,5 Sekunden.
+
+### Entscheidung
+
+- Im Status `laeuft` steht über den Spielfeldern eine Anfragebox an der Stelle der späteren Ergebnisbox. Sie zeigt zuerst nur die Anfrage, zum Beispiel "Computer fragt C3?". Das Zielfeld blinkt im betroffenen Irrgarten.
+- Nach einer Pause erscheint die Antwort als farbiges Etikett: grün für Ja, gelb für Nur bis, rot für Nein, cyan für den Schatz. Erst dann zieht die Figur.
+- Eine Anfrage steht `ANFRAGE_ANZEIGE_MS = 1500` allein in der Box. Die Antwort bleibt danach `ANTWORT_ANZEIGE_MS = 2100` stehen. Zusammen ergibt das `WIEDERGABE_PAUSE_MS = 3600`. Der Wert ersetzt die 700 Millisekunden aus ADR-030.
+- Eigene Anfragen stehen 1,5 Sekunden allein in der Box, auch wenn der Server schneller antwortet. Wechselt danach der Zug, bleibt meine Antwort 2,1 Sekunden stehen, bevor der Gegner fragt. So bleibt auch "Nein" oder "Nur bis" lesbar.
+- Nach dem Zug des Computers verlängert der Server die Zugfrist um eine Anfrage mehr als bisher: meine eigene Anfrage plus alle Anfragen des Computers, jeweils mal `WIEDERGABE_PAUSE_MS`. Ohne Computerzug verlängert er nichts.
+- Im Duell spielt die Box neue Einträge aus `gegnerAnfragen` (ADR-031) genauso ab. Bringt ein Abruf mehrere Anfragen, reiht der Client sie in eine Warteschlange ein. Solange weitere warten, läuft die Wiedergabe dreimal so schnell. Die letzte Anfrage läuft im normalen Tempo.
+- Die Ergebnisbox erscheint erst nach der letzten Anfrage der Wiedergabe.
+- Die Anfrageliste unter den Spielfeldern entfällt. Die Box zeigt jede Anfrage, und im Duell listet der Live-Kasten die Anfragen des Gegners (ADR-031). Er schreibt Anfrage und Antwort getrennt: "C3? → Nur bis C2, dann eine Mauer".
+- Wer die Auslosung gewonnen hat, steht bis zur ersten Anfrage in der Box. Bisher stand das in der Liste.
+
+### Begründung
+
+- Die Änderung betrifft nur die Anzeige. Server, Vertrag und Spielregeln bleiben gleich. Der Server antwortet weiter sofort und bleibt Schiedsrichter (ADR-002).
+- Die feste Reihenfolge Anfrage, Antwort, Zug macht jede Anfrage sichtbar und zeigt, welche Antwort zu welcher Anfrage gehört.
+- Die gemeinsame Konstante hält Client und Server gleich. Der Server verlängert die Zugfrist nach dem Computerzug automatisch um die längere Wiedergabe.
+- Verworfen wurde, dass der Gegner jede Anfrage selbst beantwortet. Dieser Vorschlag steht als Ausblick in ADR-038.
+- Verworfen wurde, nur die Pause aus ADR-030 zu verlängern. Ohne Box bleibt unklar, was Anfrage und was Antwort ist.
+- Ein erster Entwurf mit 0,7 Sekunden für Anfrage und Antwort war im Browser zu schnell zum Lesen. Außerdem überschrieb die erste Anfrage des Computers sofort meine Antwort. Ein "Nein" war deshalb nie zu sehen. Ein zweiter Entwurf mit je 2,1 Sekunden ließ die Anfrage zu lange stehen. Die Anfrage ist kurz, die Antwort braucht mehr Lesezeit.
+- Das schnellere Tempo bei Rückstand verhindert im Duell, dass die Wiedergabe dem Gegner davonläuft. Stellt der Gegner schnell viele Anfragen, holt die Box auf und zeigt die letzte wieder in Ruhe.
+
+### Konsequenzen
+
+- Ein Zug des Computers mit 20 Anfragen dauert in der Wiedergabe 72 statt 14 Sekunden. Das Spiel gegen den Computer wird spürbar langsamer.
+- Im Duell verlängert der Server keine Frist. Endet der Zug des Gegners, läuft meine Bedenkzeit schon während der letzten Wiedergabe, meist knapp vier Sekunden.
+- Bei "Ja" kostet die eigene Anfrage 1,5 Sekunden der eigenen Bedenkzeit. Jede Anfrage startet die 60 Sekunden aber neu.
+- Server und Client brauchen nach einer Änderung der Konstante einen Neustart, sonst passt die Frist nicht zur Wiedergabe.
+
+---
+
+## ADR-038 Ausblick: Antwort durch den Gegner
+
+### Kontext
+
+Im Brettspiel beantwortet der Gegner jede Anfrage selbst. Diese Interaktion fehlt im Projekt. Der Server antwortet sofort, der Gegner schaut nur zu. Der Vorschlag kam nach der Umsetzung aller Phasen, einen Tag vor der Prüfung.
+
+### Vorschlag
+
+- Stellt A eine Anfrage, merkt sich der Server sie als offen und antwortet noch nicht.
+- B sieht die Anfrage in der Anfragebox und wählt "Ja", "Nein" oder "Nur bis" mit dem letzten erreichbaren Feld.
+- Der Server prüft die Antwort gegen das echte Labyrinth. Eine falsche Antwort lehnt er ab, B korrigiert. So schummelt niemand.
+- Erst die geprüfte Antwort geht an A, dann startet bei beiden die Animation.
+- Gegen den Computer beantwortet der Spieler die Anfragen des Computers. Der Computer beantwortet die Anfragen des Spielers sofort.
+
+### Aufwand
+
+| Bereich | Änderung                                                               |
+| ------- | ---------------------------------------------------------------------- |
+| Vertrag | Feld `offeneAnfrage` im Match, Endpunkt `POST /matches/{id}/answer`    |
+| Server  | Anfrage parken, Antwort prüfen, Antwortfrist mit automatischer Antwort |
+| Fristen | Wartezeit auf die Antwort zählt nicht zur Zugfrist, ADR-030 neu fassen |
+| Client  | Knöpfe in der Anfragebox, Feldwahl für "Nur bis", Warteanzeige für A   |
+| Turnier | erbt den Ablauf über die normalen Matches (ADR-034)                    |
+| Doku    | neue ADR für ADR-002, Klartext, Spielanleitung, Vertrag                |
+
+Der Umfang entspricht etwa Phase 5.
+
+### Begründung für den Aufschub
+
+- Der Umbau ändert den Kern des Spielablaufs. Kurz vor der Prüfung gefährdet er ein getestetes und dokumentiertes System.
+- Weil der Server falsche Antworten ablehnt, gibt es immer genau eine gültige Antwort. Der Antwortende entscheidet nichts, er bestätigt. Der Gewinn liegt im Spielgefühl, nicht in der Spiellogik.
+- Jede Anfrage wartet auf einen Menschen und auf das Polling. Gegen den Computer beantwortet der Spieler 15 bis 30 Anfragen pro Spiel. Das Spiel wird deutlich langsamer.
+- ADR-037 löst die sichtbaren Schwächen ohne Änderung am Ablauf.
+
+### Konsequenzen
+
+- Für eine Umsetzung braucht es vorher drei Entscheidungen: die Länge der Antwortfrist, das Verhalten bei falscher Antwort (nur ablehnen oder als Fehler zählen) und ob der Modus pro Match wählbar ist.
+- Ein wählbarer Modus "Antworten selbst geben" hält das schnelle Spiel gegen den Computer und bietet im Duell die Interaktion des Brettspiels.
+
+---
+
 ## Offene Punkte und Erweiterungen
 
 Diese Punkte sind bewusst nicht entschieden oder als Erweiterung zurückgestellt.
+
+- Antwort durch den Gegner statt durch den Server (ADR-038).
 
 - Punktevergabe nach Siegen oder nach Anfragen im Vergleich zum Minimum. Das Ergebnis speichert die Zahl der Anfragen bereits. `minAnfragen` und `effizienz` fehlen noch (ADR-029).
 - Beendete Matches bleiben bis zum Neustart im Arbeitsspeicher. Ein Aufräumen alter Matches fehlt.

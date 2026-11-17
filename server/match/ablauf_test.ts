@@ -229,8 +229,9 @@ Deno.test('anfrage: nach dem Zug des Computers beginnt die Frist erst nach der W
     ZUERST,
   )
   assertEquals(match.amZug, NUTZER.id)
-  const wiedergabe = computerAnfragen!.length * WIEDERGABE_PAUSE_MS
-  assertEquals(wiedergabe, 700) // eine Anfrage des Computers
+  // meine Anfrage plus die Anfragen des Computers, jede mit Anfrage und Antwort in der Box
+  const wiedergabe = (computerAnfragen!.length + 1) * WIEDERGABE_PAUSE_MS
+  assertEquals(wiedergabe, 7200) // meine Anfrage und eine des Computers
   assertEquals(match.zugEndeAm!.getTime(), SPAETER.getTime() + wiedergabe + ZUG_FRIST_MS)
 })
 

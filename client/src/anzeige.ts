@@ -38,6 +38,14 @@ export function antwortText(a: AnfrageErgebnis): string {
   }
 }
 
+/** Farbe des Antwort-Etiketts in der Anfragebox; volle Klassennamen, damit Tailwind sie findet */
+export const ANTWORT_FARBE: Record<AnfrageErgebnis['ergebnis'], string> = {
+  ja: 'bg-green-100 text-green-800',
+  nurBis: 'bg-amber-100 text-amber-900',
+  nein: 'bg-red-100 text-red-800',
+  schatzGefunden: 'bg-cyan-100 text-cyan-900',
+}
+
 /** Grund für das Spielende */
 export const ENDEGRUND_TEXT: Record<Endegrund, string> = {
   schatz: 'Schatz gefunden',

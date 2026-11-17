@@ -32,6 +32,8 @@ Jeder Irrgarten bleibt in einer Farbfamilie. Mein Irrgarten ist ganz blau, der g
 - Schatz taucht mit einer Drehung auf, etwa beim Aufdecken nach Spielende
 - Steht die Figur auf dem Schatz, rücken beide auseinander: Schatz oben links und auf 75 % verkleinert, Figur in voller Größe unten rechts. Eine Kopie des Diamanten pulsiert.
 - Ergebniskasten, Warteraum und Bereitschafts-Dialog zoomen beim Erscheinen herein
+- Anfragebox (ADR-037): erst die Anfrage, das Zielfeld blinkt mit einem Rahmen. Nach 1,5 s zoomt die Antwort als Etikett herein, dann zieht die Figur. Die Antwort bleibt 2,1 s stehen. Im Duell läuft ein Rückstand dreimal so schnell.
+- Antwort-Etiketten: Ja green-100/green-800, Nur bis amber-100/amber-900, Nein red-100/red-800, Schatz cyan-100/cyan-900
 - Bei "Bewegung reduzieren" im Betriebssystem sind alle Animationen aus
 
 ## Icons

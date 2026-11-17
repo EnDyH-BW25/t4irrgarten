@@ -1,4 +1,5 @@
 import type { Match } from '@shared/types.ts'
+import { ANFRAGE_ANZEIGE_MS as FRAGE, ANTWORT_ANZEIGE_MS as ANTWORT } from '@shared/types.ts'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
@@ -387,7 +388,8 @@ describe('SpielView im Spiel', () => {
     expect(gegner.find('[data-test=zelle-B2]').attributes('disabled')).toBeDefined()
   })
 
-  it('schickt Anfrage mit Nummer und Ziel und zeigt die Antwort', async () => {
+  it('schickt Anfrage mit Nummer und Ziel, zeigt erst die Anfrage, dann die Antwort', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout'] })
     const attrappe = spielServer(() =>
       Response.json({
         ziel: 'A4',
@@ -413,7 +415,16 @@ describe('SpielView im Spiel', () => {
 
     const anfrage = attrappe.mock.calls.find(([url]) => String(url).endsWith('/queries'))!
     expect(JSON.parse(anfrage[1]?.body as string)).toEqual({ anfrageNr: 1, ziel: 'A4' })
-    expect(wrapper.find('[data-test=verlauf]').text()).toContain('Du: A4, Ja, weiter auf A4')
+    // Erst nur die Anfrage: Zielfeld blinkt, Antwort steht noch aus, Figur noch auf A1
+    expect(wrapper.find('[data-test=anfrage]').text()).toBe('Du fragst A4?')
+    expect(wrapper.find('[data-test=antwort-offen]').exists()).toBe(true)
+    expect(gegner().find('[data-test=zelle-A4] [data-test=anfrageziel]').exists()).toBe(true)
+    expect(gegner().find('[data-test=figur][data-zelle=A1]').exists()).toBe(true)
+
+    await vi.advanceTimersByTimeAsync(FRAGE)
+    expect(wrapper.find('[data-test=antwort]').text()).toBe('Ja, weiter auf A4')
+    expect(wrapper.find('[data-test=antwort]').classes()).toContain('bg-green-100')
+    expect(gegner().find('[data-test=anfrageziel]').exists()).toBe(false)
     expect(gegner().find('[data-test=figur][data-zelle=A4]').exists()).toBe(true)
   })
 
@@ -445,21 +456,33 @@ describe('SpielView im Spiel', () => {
     const gegner = () => wrapper.findAllComponents({ name: 'LabyrinthFeld' })[1]!
     await gegner().find('[data-test=zelle-B1]').trigger('click')
     await flushPromises()
+    // Meine Antwort "Nein" bleibt lesbar stehen, bevor der Computer fragt
+    await vi.advanceTimersByTimeAsync(FRAGE)
+    expect(wrapper.find('[data-test=anfrage]').text()).toBe('Du fragst B1?')
+    expect(wrapper.find('[data-test=antwort]').text()).toBe('Nein, eine Mauer direkt davor')
+    expect(wrapper.find('[data-test=antwort]').classes()).toContain('bg-red-100')
 
-    // Wiedergabe läuft: Figur des Computers noch am Start, ich darf nicht fragen
+    await vi.advanceTimersByTimeAsync(ANTWORT)
+    // Wiedergabe läuft: erst nur die Anfrage des Computers, Figur noch am Start
     expect(wrapper.find('[data-test=zug]').text()).toContain('Computer sucht')
+    expect(wrapper.find('[data-test=anfrage]').text()).toBe('Computer fragt C1?')
+    expect(eigen().find('[data-test=zelle-C1] [data-test=anfrageziel]').exists()).toBe(true)
     expect(eigen().find('[data-test=figur][data-zelle=A1]').exists()).toBe(true)
     expect(gegner().find('[data-test=zelle-A4]').attributes('disabled')).toBeDefined()
 
-    await vi.advanceTimersByTimeAsync(700)
+    // Nach der Anzeige der Anfrage: Antwort und Zug
+    await vi.advanceTimersByTimeAsync(FRAGE)
+    expect(wrapper.find('[data-test=antwort]').text()).toBe('Ja, weiter auf C1')
     expect(eigen().find('[data-test=figur][data-zelle=C1]').exists()).toBe(true)
 
-    await vi.advanceTimersByTimeAsync(700)
+    await vi.advanceTimersByTimeAsync(ANTWORT + FRAGE)
+    expect(wrapper.find('[data-test=anfrage]').text()).toBe('Computer fragt C3?')
+    expect(wrapper.find('[data-test=antwort]').classes()).toContain('bg-amber-100')
     expect(eigen().find('[data-test=figur][data-zelle=C2]').exists()).toBe(true)
+
+    await vi.advanceTimersByTimeAsync(ANTWORT)
     expect(wrapper.find('[data-test=zug]').text()).toContain('Du bist am Zug')
-    const verlauf = wrapper.find('[data-test=verlauf]').text()
-    expect(verlauf).toContain('Computer: C3, Nur bis C2')
-    expect(verlauf).toContain('Computer: C1, Ja')
+    expect(wrapper.find('[data-test=verlauf]').exists()).toBe(false) // keine Liste mehr
   })
 
   it('fragt auch während der Wiedergabe ab, damit die Abruffrist nicht abläuft', async () => {
@@ -483,13 +506,14 @@ describe('SpielView im Spiel', () => {
     await gegner.find('[data-test=zelle-B1]').trigger('click')
     await flushPromises()
 
-    await vi.advanceTimersByTimeAsync(1500)
+    await vi.advanceTimersByTimeAsync(FRAGE + ANTWORT + 1500)
     expect(wrapper.find('[data-test=zug]').text()).toContain('Computer sucht')
     const abrufe = attrappe.mock.calls.filter(([url]) => String(url).includes('since=2'))
     expect(abrufe.length).toBeGreaterThan(0)
   })
 
   it('zeigt das Spielende und deckt das Labyrinth des Gegners auf', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout'] })
     spielServer(() =>
       Response.json({
         ziel: 'A3',
@@ -510,6 +534,7 @@ describe('SpielView im Spiel', () => {
     const gegner = () => wrapper.findAllComponents({ name: 'LabyrinthFeld' })[1]!
     await gegner().find('[data-test=zelle-A3]').trigger('click')
     await flushPromises()
+    await vi.advanceTimersByTimeAsync(FRAGE)
 
     expect(wrapper.find('[data-test=ergebnis]').text()).toContain('Gewonnen!')
     expect(wrapper.find('[data-test=ergebnis]').text()).toContain('Schatz gefunden')
@@ -597,7 +622,7 @@ describe('SpielView: Fristen (Phase 4)', () => {
     await flushPromises()
     expect(attrappe.mock.calls.some(([url]) => String(url).endsWith('/ready'))).toBe(true)
     expect(wrapper.find('[data-test=bereitschaft]').exists()).toBe(false)
-    expect(wrapper.find('[data-test=verlauf]').text()).toContain('Du hast die Auslosung gewonnen')
+    expect(wrapper.find('[data-test=auslosung]').text()).toContain('Du hast die Auslosung gewonnen')
     // Jetzt läuft die Zugfrist
     expect(wrapper.find('[data-test=countdown]').text()).toBe('1:00')
     expect(wrapper.find('[data-test=countdown]').attributes('title')).toBe('Deine Bedenkzeit')
@@ -807,8 +832,50 @@ describe('SpielView im Duell (Phase 5)', () => {
     expect(kasten.text()).toContain('Ben sucht deinen Schatz')
     expect(kasten.text()).toContain('2 Anfragen')
     const zeilen = kasten.findAll('[data-test=live-liste] li').map((li) => li.text())
-    expect(zeilen).toEqual(['D3: Nur bis C3, dann eine Mauer', 'A3: Ja, weiter auf A3'])
+    expect(zeilen).toEqual(['D3? → Nur bis C3, dann eine Mauer', 'A3? → Ja, weiter auf A3'])
     expect(wrapper.find('[data-test=zug]').text()).toBe('Ben ist am Zug.')
+  })
+
+  it('Anfragebox spielt neue Anfragen des Gegners aus dem Polling nach', async () => {
+    vi.useFakeTimers({ toFake: ['setTimeout', 'setInterval', 'clearInterval'] })
+    let stand = duell({ version: 1, gegnerAnfragen: [] })
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>(async () => Response.json(stand)),
+    )
+    const { wrapper } = await aufbauen()
+    const eigen = () => wrapper.findAllComponents({ name: 'LabyrinthFeld' })[0]!
+
+    // Ein Abruf bringt zwei neue Anfragen von Ben
+    stand = duell({
+      version: 2,
+      gegnerAnfragen: [
+        { ziel: 'A3', ergebnis: 'ja', position: 'A3', mauer: null },
+        { ziel: 'C3', ergebnis: 'nurBis', position: 'B3', mauer: 'B3_C3' },
+      ],
+      gegnerKarte: {
+        position: 'B3',
+        besuchteZellen: ['A1', 'A2', 'A3', 'B3'],
+        entdeckteMauern: ['B3_C3'],
+      },
+    })
+    await vi.advanceTimersByTimeAsync(1500)
+    expect(wrapper.find('[data-test=anfrage]').text()).toBe('Ben fragt A3?')
+    expect(eigen().find('[data-test=zelle-A3] [data-test=anfrageziel]').exists()).toBe(true)
+    expect(eigen().find('[data-test=figur][data-zelle=A1]').exists()).toBe(true)
+
+    // Eine weitere wartet: Die erste läuft dreimal so schnell, damit die Box aufholt
+    await vi.advanceTimersByTimeAsync(FRAGE / 3)
+    expect(wrapper.find('[data-test=antwort]').text()).toBe('Ja, weiter auf A3')
+    expect(eigen().find('[data-test=figur][data-zelle=A3]').exists()).toBe(true)
+
+    await vi.advanceTimersByTimeAsync(ANTWORT / 3)
+    expect(wrapper.find('[data-test=anfrage]').text()).toBe('Ben fragt C3?')
+    // Die letzte läuft im normalen Tempo
+    await vi.advanceTimersByTimeAsync(FRAGE / 3)
+    expect(wrapper.find('[data-test=antwort-offen]').exists()).toBe(true)
+    await vi.advanceTimersByTimeAsync((FRAGE * 2) / 3)
+    expect(wrapper.find('[data-test=antwort]').text()).toBe('Nur bis B3, dann eine Mauer')
   })
 
   it('Live-Kasten ohne Anfragen sagt das; gegen den Computer gibt es ihn nicht', async () => {

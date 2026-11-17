@@ -239,11 +239,17 @@ export type Statistik = {
   quote: number // siege / (siege + niederlagen), bei 0 Spielen 0
 }
 
+/** So lange steht eine Anfrage allein in der Anfragebox, bevor die Antwort erscheint (ADR-037) */
+export const ANFRAGE_ANZEIGE_MS = 1500
+/** So lange bleibt die Antwort stehen, bevor die nächste Anfrage kommt (ADR-037) */
+export const ANTWORT_ANZEIGE_MS = 2100
+
 /**
- * Pause zwischen zwei Anfragen des Computers bei der Wiedergabe im Client. Der Server verlängert
- * um diese Zeit pro Anfrage die Zugfrist danach, damit die Wiedergabe keine Bedenkzeit kostet.
+ * Dauer einer Anfrage in der Anfragebox: erst die Anfrage, dann die Antwort. Nach dem Zug des
+ * Computers verlängert der Server die Zugfrist um diese Zeit pro Anfrage, damit die Wiedergabe
+ * keine Bedenkzeit kostet.
  */
-export const WIEDERGABE_PAUSE_MS = 700
+export const WIEDERGABE_PAUSE_MS = ANFRAGE_ANZEIGE_MS + ANTWORT_ANZEIGE_MS
 
 /** Maximale Anzahl an Mauern */
 export const MAX_MAUERN = 30

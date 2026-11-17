@@ -10,9 +10,9 @@ import type {
   Match,
   Zelle,
 } from '@shared/types.ts'
-import { MAX_MAUERN, WIEDERGABE_PAUSE_MS } from '@shared/types.ts'
+import { ANFRAGE_ANZEIGE_MS, ANTWORT_ANZEIGE_MS, MAX_MAUERN } from '@shared/types.ts'
 import { abfragen, ApiFehler, get, post, put } from '@/api'
-import { antwortText, ENDEGRUND_TEXT, SCHWIERIGKEITEN, STATUS_TEXT } from '@/anzeige'
+import { ANTWORT_FARBE, antwortText, ENDEGRUND_TEXT, SCHWIERIGKEITEN, STATUS_TEXT } from '@/anzeige'
 import { nutzer } from '@/anmeldung'
 import { geradeZiele, mauerUmschalten, schatzSetzen, spurFortschreiben } from '@/brett'
 import { POLL_MS, restSekunden, zeitText } from '@/countdown'
@@ -56,8 +56,24 @@ const startFehler = ref<string | null>(null)
 const fragt = ref(false)
 /** Während der Zug des Computers abläuft, zeigt das linke Feld diese Zwischenstände */
 const abspielKarte = ref<BekannteKarte | null>(null)
-/** Verlauf der Anfragen, neueste oben */
-const verlauf = ref<string[]>([])
+/** Wer die Auslosung gewonnen hat; steht in der Anfragebox bis zur ersten Anfrage */
+const auslosung = ref<string | null>(null)
+/** Zählt die Antworten, damit jedes neue Etikett seine Animation abspielt */
+const antwortNr = ref(0)
+
+/**
+ * Inhalt der Anfragebox (ADR-037): erst nur die Anfrage, nach einer Pause auch die Antwort.
+ * feld sagt, in welchem Irrgarten das Zielfeld blinkt.
+ */
+type Anzeige = {
+  wer: string
+  ziel: Zelle
+  antwort: AnfrageErgebnis | null
+  feld: 'eigen' | 'gegner'
+}
+const anzeige = ref<Anzeige | null>(null)
+/** Hält meine letzte Antwort lesbar: Die Wiedergabe des Gegners wartet darauf */
+let antwortLesbar: Promise<unknown> = Promise.resolve()
 
 // ---------- Zeit ----------
 
@@ -146,8 +162,9 @@ const ziele = computed<Zelle[]>(() =>
 const gegnerSpur = computed(() => abspielKarte.value ?? match.value?.gegnerKarte ?? null)
 
 const zugText = computed(() => {
-  if (!match.value || match.value.status !== 'laeuft') return null
-  if (abspielKarte.value) return 'Der Computer sucht ...'
+  if (!match.value) return null
+  if (abspielKarte.value) return `${gegnerName.value} sucht ...`
+  if (match.value.status !== 'laeuft') return null
   return ichBinDran.value
     ? 'Du bist am Zug. Wähle ein Feld im Irrgarten des Gegners.'
     : `${gegnerName.value} ist am Zug.`
@@ -190,6 +207,7 @@ async function laden() {
 async function abfrageTick() {
   if (!match.value || fragtAb) return
   if (vorbei.value) return clearInterval(polling)
+  const alt = match.value
   // Eigene Änderungen sind unterwegs: Ihre Antwort ist neuer als jeder Abruf.
   // Während der Wiedergabe des Computerzugs fragt der Client weiter ab. Jeder Abruf ist ein
   // Lebenszeichen, und eine lange Wiedergabe dauert mehr als die 15 Sekunden der Abruffrist.
@@ -197,7 +215,10 @@ async function abfrageTick() {
   fragtAb = true
   try {
     const neu = await abfragen<Match>(`/matches/${props.id}`, match.value.version)
-    if (neu && neu.version > match.value.version) uebernehmen(neu)
+    if (neu && neu.version > alt.version) {
+      uebernehmen(neu)
+      if (istDuell.value) gegnerNachspielen(alt, neu)
+    }
   } catch {
     // Netz kurz weg: Der nächste Abruf versucht es wieder
   } finally {
@@ -279,11 +300,11 @@ async function starten() {
     // Hat der Computer die Auslosung gewonnen, ist sein erster Zug schon gespielt
     if (gestartet.status !== 'laeuft') return
     if (gestartet.amZug === meineId.value) {
-      verlauf.value.unshift('Du hast die Auslosung gewonnen und beginnst.')
+      auslosung.value = 'Du hast die Auslosung gewonnen und beginnst.'
     } else if (gestartet.anfrageNr > 1) {
-      verlauf.value.unshift('Der Computer hat die Auslosung gewonnen und ist schon gezogen.')
+      auslosung.value = 'Der Computer hat die Auslosung gewonnen und ist schon gezogen.'
     } else {
-      verlauf.value.unshift(`${gegnerName.value} hat die Auslosung gewonnen und beginnt.`)
+      auslosung.value = `${gegnerName.value} hat die Auslosung gewonnen und beginnt.`
     }
   } catch (e) {
     startFehler.value = fehlertext(e)
@@ -303,15 +324,24 @@ async function anfragen(ziel: Zelle) {
   hinweis.value = null
   const vorher = match.value.gegnerKarte
   let computerZug: AnfrageErgebnis[] = []
+  // Die Anfrage erscheint sofort in der Box, die Antwort erst nach der Pause
+  anzeige.value = { wer: 'Du', ziel, antwort: null, feld: 'gegner' }
   try {
-    const antwort = await post<AnfrageAntwort>(`/matches/${props.id}/queries`, {
-      anfrageNr: match.value.anfrageNr,
-      ziel,
-    })
-    verlauf.value.unshift(`Du: ${ziel}, ${antwortText(antwort)}`)
+    const [antwort] = await Promise.all([
+      post<AnfrageAntwort>(`/matches/${props.id}/queries`, {
+        anfrageNr: match.value.anfrageNr,
+        ziel,
+      }),
+      warten(ANFRAGE_ANZEIGE_MS),
+    ])
+    anzeige.value = { ...anzeige.value, antwort }
+    // Wechselt der Zug, überschreibt die Anfrage des Gegners sonst sofort meine Antwort
+    antwortLesbar = warten(ANTWORT_ANZEIGE_MS)
+    antwortNr.value++
     uebernehmen(antwort.match)
     computerZug = antwort.computerAnfragen ?? []
   } catch (e) {
+    anzeige.value = null
     hinweis.value = fehlertext(e)
     // 409: Der Stand auf dem Server ist ein anderer, zum Beispiel nach einem Doppelklick
     if (e instanceof ApiFehler && e.status === 409) await laden()
@@ -319,22 +349,62 @@ async function anfragen(ziel: Zelle) {
     fragt.value = false
   }
   // Erst nach der Anfrage abspielen: Solange fragt gilt, ruft das Polling nicht ab
-  if (computerZug.length && vorher) await computerAbspielen(vorher, computerZug)
+  if (computerZug.length && vorher) await einreihen(vorher, computerZug)
 }
 
-/** Spielt den Zug des Computers Anfrage für Anfrage auf meinem Feld ab */
-async function computerAbspielen(start: BekannteKarte, anfragenListe: AnfrageErgebnis[]) {
+/** Anfragen des Gegners, die noch abgespielt werden, älteste zuerst */
+const warteschlange: AnfrageErgebnis[] = []
+let wiedergabe: Promise<void> | null = null
+
+/**
+ * Hängt Anfragen des Gegners an die Wiedergabe an. Läuft schon eine, spielt sie die neuen
+ * einfach mit ab. Sonst startet eine neue ab der Karte start.
+ */
+function einreihen(start: BekannteKarte, liste: AnfrageErgebnis[]): Promise<void> {
+  warteschlange.push(...liste)
+  if (!wiedergabe) wiedergabe = abspielen(start).finally(() => (wiedergabe = null))
+  return wiedergabe
+}
+
+/**
+ * Spielt die Anfragen des Gegners nacheinander auf meinem Feld ab. Jede Anfrage dauert
+ * WIEDERGABE_PAUSE_MS: erst ANFRAGE_ANZEIGE_MS nur die Anfrage, dann Antwort und Zug,
+ * danach bleibt die Antwort ANTWORT_ANZEIGE_MS stehen.
+ * Im Duell holt die Wiedergabe auf: Warten weitere Anfragen, läuft sie dreimal so schnell.
+ * Sonst liefe sie dem Gegner davon, und meine Bedenkzeit verstriche schon während der Wiedergabe.
+ */
+async function abspielen(start: BekannteKarte) {
   let karte = start
   abspielKarte.value = karte
-  for (const a of anfragenListe) {
-    await warten(WIEDERGABE_PAUSE_MS)
+  // Erst meine letzte Antwort zu Ende zeigen, zum Beispiel "Nein, eine Mauer direkt davor"
+  await antwortLesbar
+  while (warteschlange.length) {
+    const a = warteschlange.shift()!
+    const tempo = istDuell.value && warteschlange.length > 0 ? 3 : 1
+    anzeige.value = { wer: gegnerName.value, ziel: a.ziel, antwort: null, feld: 'eigen' }
+    await warten(ANFRAGE_ANZEIGE_MS / tempo)
     karte = spurFortschreiben(karte, a)
     abspielKarte.value = karte
-    verlauf.value.unshift(`Computer: ${a.ziel}, ${antwortText(a)}`)
+    anzeige.value = { ...anzeige.value, antwort: a }
+    antwortNr.value++
+    await warten(ANTWORT_ANZEIGE_MS / tempo)
   }
   // Am Ende gilt wieder der Stand des Servers
   abspielKarte.value = null
 }
+
+/** Duell: Das Polling bringt neue Anfragen des Gegners. Die spielt die Box nach. */
+function gegnerNachspielen(alt: Match, neu: Match) {
+  const bisher = alt.gegnerAnfragen?.length ?? 0
+  const neue = (neu.gegnerAnfragen ?? []).slice(bisher)
+  if (neue.length && alt.gegnerKarte) einreihen(alt.gegnerKarte, neue)
+}
+
+/** Das Ergebnis erscheint erst, wenn die letzte Anfrage zu Ende abgespielt ist */
+const ergebnisZeigen = computed(() => vorbei.value && !abspielKarte.value)
+const anfrageText = computed(() =>
+  anzeige.value ? `${anzeige.value.wer} ${anzeige.value.wer === 'Du' ? 'fragst' : 'fragt'}` : '',
+)
 
 /** Nach dem Spiel zurück: im Turnier zur Übersicht, sonst zum Dashboard */
 const rueckweg = computed(() => {
@@ -450,7 +520,7 @@ onUnmounted(() => {
 
       <!-- Spielende -->
       <div
-        v-else-if="vorbei"
+        v-else-if="ergebnisZeigen"
         data-test="ergebnis"
         class="animate-hineinzoomen rounded-lg p-4 text-center"
         :class="
@@ -497,7 +567,35 @@ onUnmounted(() => {
         </p>
       </div>
 
-      <p v-else-if="zugText" data-test="zug" class="font-medium">{{ zugText }}</p>
+      <!-- Anfragebox (ADR-037): erst die Anfrage, dann die Antwort, dann der Zug auf dem Feld -->
+      <div
+        v-else-if="match.status === 'laeuft' || abspielKarte"
+        data-test="anfragebox"
+        class="flex min-h-36 flex-col items-center justify-center gap-2 rounded-lg bg-white p-4 text-center shadow-lg"
+        aria-live="polite"
+      >
+        <p data-test="zug" class="text-sm text-slate-600">{{ zugText }}</p>
+        <template v-if="anzeige">
+          <p data-test="anfrage" class="font-titel text-2xl">
+            {{ anfrageText }} <span class="text-3xl">{{ anzeige.ziel }}?</span>
+          </p>
+          <p
+            v-if="anzeige.antwort"
+            :key="`antwort-${antwortNr}`"
+            data-test="antwort"
+            class="animate-hineinzoomen rounded-full px-4 py-1 font-titel text-xl"
+            :class="ANTWORT_FARBE[anzeige.antwort.ergebnis]"
+          >
+            {{ antwortText(anzeige.antwort) }}
+          </p>
+          <p v-else data-test="antwort-offen" class="text-slate-400 motion-safe:animate-pulse">
+            Antwort kommt ...
+          </p>
+        </template>
+        <p v-else-if="auslosung" data-test="auslosung" class="font-titel text-xl">
+          {{ auslosung }}
+        </p>
+      </div>
 
       <!-- Live-Kasten im Duell: Optik wie das Bereitschafts-Overlay, aber ohne Abdunkeln -->
       <div
@@ -520,7 +618,7 @@ onUnmounted(() => {
             :key="gegnerZuege.length - i"
             :class="i === 0 ? 'font-semibold' : 'text-slate-600'"
           >
-            {{ a.ziel }}: {{ antwortText(a) }}
+            {{ a.ziel }}? → {{ antwortText(a) }}
           </li>
         </ol>
         <p v-else class="text-sm text-slate-600">Noch keine Anfragen.</p>
@@ -537,6 +635,7 @@ onUnmounted(() => {
             :schatz="entwurf.schatz"
             :figur="imAufbau ? null : (gegnerSpur?.position ?? null)"
             :besucht="imAufbau ? [] : (gegnerSpur?.besuchteZellen ?? [])"
+            :anfrage-ziel="anzeige?.feld === 'eigen' && !anzeige.antwort ? anzeige.ziel : null"
             :bearbeitbar="imAufbau"
             @mauer="mauerKlick"
             @zelle="zelleKlick"
@@ -621,15 +720,11 @@ onUnmounted(() => {
             :figur="match.bekannteKarte.position"
             :besucht="match.bekannteKarte.besuchteZellen"
             :ziele="ziele"
+            :anfrage-ziel="anzeige?.feld === 'gegner' && !anzeige.antwort ? anzeige.ziel : null"
             @zelle="anfragen"
           />
         </div>
       </div>
-
-      <!-- Verlauf der Anfragen, neueste oben -->
-      <ol v-if="verlauf.length" data-test="verlauf" class="space-y-1 text-sm">
-        <li v-for="(eintrag, i) in verlauf" :key="verlauf.length - i">{{ eintrag }}</li>
-      </ol>
 
       <button
         v-if="!vorbei"

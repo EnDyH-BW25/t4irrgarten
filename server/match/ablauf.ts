@@ -324,8 +324,10 @@ export function anfrageStellen(
     if (gegner!.istComputer) computerAnfragen = computerSpielt(match, jetzt, zufall)
   }
 
-  // Die Bedenkzeit beginnt erst, wenn der Client den Zug des Computers abgespielt hat
-  const wiedergabeMs = (computerAnfragen?.length ?? 0) * WIEDERGABE_PAUSE_MS
+  // Die Bedenkzeit beginnt erst, wenn der Client den Zug des Computers abgespielt hat.
+  // Davor zeigt er meine eigene Anfrage mit Antwort, daher eine Anfrage mehr (ADR-037).
+  const computerZuege = computerAnfragen?.length ?? 0
+  const wiedergabeMs = computerZuege > 0 ? (computerZuege + 1) * WIEDERGABE_PAUSE_MS : 0
   zugFristStarten(match, new Date(jetzt.getTime() + wiedergabeMs))
   match.version++
   return { ergebnis, computerAnfragen }
