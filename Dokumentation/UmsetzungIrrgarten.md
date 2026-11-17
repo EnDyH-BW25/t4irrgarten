@@ -65,6 +65,10 @@ Die Reihenfolge folgt den Abhängigkeiten. Jede Phase endet mit einem spielbaren
 - Warteraum mit bis zu vier Spielern, Host-Rechte, Ablauf nach 30 Minuten
 - Auffüllen mit einem Computer-Spieler, Auslosung von Runde 1
 - Runde 2 mit Finale und Spiel um Platz 3, Turnierübersicht, Walkover-Regeln
+- Umgesetzt: `server/turnier/` mit Warteraum, Start, Fortschreiben beim Abruf und Routen `/competitions`. Ein Turnier-Match ist ein normales Match mit `competitionId` (ADR-034).
+- Ausscheiden, Walkover und Abbruch folgen ADR-035. Neu ist der Abbruch, wenn beide Spieler einer Paarung in Runde 2 ausgeschieden sind.
+- Die Turnierseite `/turnier/:id` ist Warteraum, Übersicht und Wartebildschirm. Sie wechselt von selbst ins eigene Match (ADR-036).
+- Vertrag ergänzt: `GET /competitions/current`, `serverZeit` und `codeEndeAm` in der Competition.
 
 # Phase 8: Abschluss (½ Tag)
 

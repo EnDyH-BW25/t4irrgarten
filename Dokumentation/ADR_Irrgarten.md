@@ -22,8 +22,8 @@ Die Übersicht trennt zwei Angaben.
 | ADR-007 | Lösbarkeitsprüfung mit Nachbesserung                | Planung     | Akzeptiert | umgesetzt |
 | ADR-008 | Bereitschaftsprüfung und Abwesenheit                | Planung     | Akzeptiert | umgesetzt |
 | ADR-009 | Spielcode für das Duell                             | Planung     | Akzeptiert | umgesetzt |
-| ADR-010 | Turnier mit Host, Warteraum und Computer-Auffüllung | Planung     | Akzeptiert | geplant   |
-| ADR-011 | Turnierablauf, Ausstieg und Abbruch                 | Planung     | Akzeptiert | geplant   |
+| ADR-010 | Turnier mit Host, Warteraum und Computer-Auffüllung | Planung     | Akzeptiert | umgesetzt |
+| ADR-011 | Turnierablauf, Ausstieg und Abbruch                 | Planung     | Akzeptiert | umgesetzt |
 | ADR-012 | Aktualisierung per Polling                          | Planung     | Akzeptiert | teilweise |
 | ADR-013 | Kein Gastmodus                                      | Planung     | Akzeptiert | umgesetzt |
 | ADR-014 | Ergebnisse vom Server, Statistik statt Rangliste    | Planung     | Akzeptiert | umgesetzt |
@@ -46,6 +46,9 @@ Die Übersicht trennt zwei Angaben.
 | ADR-031 | Live-Sicht über die Anfrageliste des Gegners        | 5           | Akzeptiert | umgesetzt |
 | ADR-032 | Warteraum als Status der Spielansicht               | 5           | Akzeptiert | umgesetzt |
 | ADR-033 | Ergebnisse seitenweise und nach dem offenen Match   | 6           | Akzeptiert | umgesetzt |
+| ADR-034 | Turnier als Hülle um normale Matches                | 7           | Akzeptiert | umgesetzt |
+| ADR-035 | Ausscheiden, Walkover und Abbruch im Turnier        | 7           | Akzeptiert | umgesetzt |
+| ADR-036 | Turnierseite als Warteraum und Wartebildschirm      | 7           | Akzeptiert | umgesetzt |
 
 ---
 
@@ -1034,12 +1037,105 @@ Der Klartext verlangt im Dashboard Siege, Niederlagen, Quote und die letzten zeh
 
 ---
 
+## ADR-034 Turnier als Hülle um normale Matches
+
+### Kontext
+
+Ein Turnier besteht aus drei bis vier Matches in zwei Runden (ADR-010, ADR-011). Jedes Match läuft wie ein Duell oder wie ein Spiel gegen den Computer. Aufbau, Fristen, Anfragen und Ergebnisse gibt es seit Phase 3 bis 5. Der Server hat keinen Timer (ADR-028). Ein Turnier muss trotzdem Runde 2 anlegen, sobald Runde 1 endet.
+
+### Entscheidung
+
+- Das Turnier lebt in `server/turnier/` mit eigenem `TurnierSpeicher` im Arbeitsspeicher, wie die Matches (ADR-026).
+- Ein Turnier-Match ist ein normales Match mit `competitionId` und `runde`. Gegen den Computer entsteht es über `computerMatchErstellen`. Zwei Menschen spielen ein Duell, dem der Gegner sofort beitritt (`duellErstellen` und `beitreten`). Beide starten direkt im Aufbau.
+- Eine Paarung speichert nur `matchId` und `platzUm`. Status, Sieger und Anfragen liest die Ansicht beim Abruf aus dem Match.
+- Die Auslosung mischt alle Teilnehmer und paart Platz 1 mit 2 und Platz 3 mit 4.
+- `turnierNachtragen` läuft bei jedem Abruf eines Turniers. Es prüft die Code-Frist von 30 Minuten, trägt die Fristen der Matches der aktuellen Runde nach und schreibt das Turnier fort. Ist Runde 1 beendet, entsteht Runde 2. Ist Runde 2 beendet, steht die Platzierung fest und landet in den Ergebnissen.
+- Wer in einem offenen Match oder in einem wartenden oder laufenden Turnier steckt, startet nichts Neues. Der Server antwortet mit 409. Match- und Turnier-Routen teilen sich dafür den `Spielstand` in `server/turnier/nachtragen.ts`.
+- Duell- und Turnier-Codes sind nie gleichzeitig vergeben. Der Code des anderen Modus liefert 404 (ADR-009).
+- Der Vertrag erhält `GET /competitions/current` sowie `serverZeit` und `codeEndeAm` in der Competition.
+
+### Begründung
+
+- Ein Turnier-Match ohne eigenen Typ nutzt den ganzen Ablauf aus Phase 3 bis 5 unverändert. Fristen, Live-Sicht und Ergebnisse gelten ohne Sonderfall.
+- Die Paarung speichert keine Kopie von Status und Sieger. So gibt es jede Information nur an einer Stelle.
+- Verworfen wurde ein Timer, der Runde 2 anlegt. Er widerspricht ADR-028 und überlebt keinen Neustart.
+- Verworfen wurde ein Turnier-Match mit eigenem Status `wartet`. Beide Spieler stehen fest, ein Code ist überflüssig.
+- Die Sperre verhindert, dass ein Spieler parallel ein anderes Match spielt und sein Turnier-Match per Frist verliert.
+- `/competitions/current` findet ein Turnier auch zwischen zwei Runden wieder. In dieser Zeit gibt es kein offenes Match.
+
+### Konsequenzen
+
+- Runde 2 entsteht erst beim nächsten Abruf der Turnierübersicht oder des Dashboards. Ihr Aufbau beginnt in diesem Moment.
+- Die Ergebnisse enthalten Turnier und Runde sofort und den Endplatz nach Runde 2 (`ErgebnisSpeicher.platzierungEintragen`).
+- Die Ansicht eines beendeten Matches zeigt das Labyrinth des Gegners nur, wenn er gesetzt hat. Wer im Aufbau aufgibt oder kampflos verliert, hat keins. Diese Prüfung behebt auch einen Fehler aus Phase 5.
+
+---
+
+## ADR-035 Ausscheiden, Walkover und Abbruch im Turnier
+
+### Kontext
+
+ADR-011 legt fest: Wer ein Match verlässt oder per Frist verliert, verliert auch alle folgenden Matches. Erscheint in einem Match keiner der beiden Spieler, endet das Turnier ohne Wertung. Offen blieb, welche Endegründe als Verlassen zählen und was passiert, wenn beide Spieler einer Paarung in Runde 2 schon ausgeschieden sind.
+
+### Entscheidung
+
+- Als ausgeschieden gilt, wer ein Match mit `aufgabe`, `abwesenheit`, `zugfrist`, `startfrist` oder `walkover` verliert. Eine Niederlage mit `schatz` zählt nicht.
+- Das Match einer Paarung mit genau einem ausgeschiedenen Spieler entsteht trotzdem und endet sofort mit `walkover`. Der anwesende Spieler gewinnt.
+- Sind beide Spieler einer Paarung in Runde 2 ausgeschieden, endet das Turnier ohne Wertung (`abgebrochen`).
+- Endet ein Match einer Runde als `abgebrochen`, weil keiner bereit war, endet das Turnier ebenfalls ohne Wertung.
+- Gespielte Matches behalten ihre Ergebnisse, auch wenn das Turnier danach abbricht.
+
+### Begründung
+
+- Die Aufzählung der Endegründe folgt dem Klartext: Verlassen, 60 Sekunden ohne Anfrage und fehlende Bereitschaft sind Fristverluste. Wer den Schatz nicht als Erster findet, ist dagegen anwesend.
+- Ein angelegtes und sofort beendetes Match erscheint in der Übersicht als Paarung mit Sieger. Beide Spieler erhalten ein Ergebnis wie bei jedem Match.
+- Zwei ausgeschiedene Spieler entsprechen dem Fall "keiner erscheint" aus ADR-011.
+- Verworfen wurde, beide als Verlierer zu werten. Dann fehlen Platz 3 und 4, und eine unvollständige Platzierung ist schwer zu erklären.
+
+### Konsequenzen
+
+- Der Computer scheidet nie aus, weil er weder aufgibt noch Fristen versäumt.
+- Ein kampfloses Match hat keine Anfragen. Sein Ergebnis zählt mit 0 Anfragen.
+
+---
+
+## ADR-036 Turnierseite als Warteraum und Wartebildschirm
+
+### Kontext
+
+Der Klartext verlangt einen Warteraum mit Namen und Anzahl, einen Startknopf nur für den Host, einen Wartebildschirm für den, der früher fertig ist, und eine Übersicht mit Paarungen, Stand und Platzierung. Spieler wechseln zwischen Turnier und Match hin und her.
+
+### Entscheidung
+
+- Eine Seite `/turnier/:id` zeigt im Status `wartet` den Warteraum und danach die Übersicht. Die Übersicht ist zugleich der Wartebildschirm.
+- Die Seite ruft das Turnier alle 1,5 Sekunden ab, ohne `since`. Nach `beendet` oder `abgebrochen` hört sie auf.
+- Meldet der Server `meinNaechstesMatchId`, wechselt die Seite sofort in dieses Match.
+- Nach einem Turnier-Match führt die Spielansicht zur Turnierübersicht statt zum Dashboard. Das gilt auch nach dem Aufgeben.
+- Nur der Host sieht Code und Countdown. Sein Knopf zum Verlassen heißt "Turnier auflösen".
+- Das Dashboard zeigt bei offenem Turnier ohne offenes Match die Karte "Laufendes Turnier". Es lädt erst `/matches/current`, dann `/competitions/current`, dann die Statistik.
+
+### Begründung
+
+- Der automatische Wechsel bringt alle Spieler zum Start der Runde 2 ohne Klick ins Match. Die Aufbauzeit läuft ab dem Anlegen.
+- Ohne `since` bleibt der Server einfach. Ein Turnier ist klein, und jeder Abruf soll ohnehin fortschreiben.
+- Verworfen wurde ein Wartebildschirm in der Spielansicht. Er bräuchte dort das Turnier und eine zweite Abfrage.
+- Die Reihenfolge der Abrufe im Dashboard folgt ADR-033. Erst nach dem Nachtragen stimmen Turnier und Statistik.
+
+### Konsequenzen
+
+- Wer nach Runde 1 auf der Endansicht seines Matches bleibt, bemerkt Runde 2 erst mit dem Klick auf "Zur Turnierübersicht". Die Aufbauzeit läuft in dieser Zeit schon.
+- Der Vertrag hat für die Competition kein `version`. Ein späteres `since` für Turniere bleibt möglich.
+
+---
+
 ## Offene Punkte und Erweiterungen
 
 Diese Punkte sind bewusst nicht entschieden oder als Erweiterung zurückgestellt.
 
 - Punktevergabe nach Siegen oder nach Anfragen im Vergleich zum Minimum. Das Ergebnis speichert die Zahl der Anfragen bereits. `minAnfragen` und `effizienz` fehlen noch (ADR-029).
 - Beendete Matches bleiben bis zum Neustart im Arbeitsspeicher. Ein Aufräumen alter Matches fehlt.
+- Beendete Turniere bleiben wie Matches bis zum Neustart im Arbeitsspeicher. Ein Neustart beendet laufende Turniere.
+- Runde 2 entsteht erst beim nächsten Abruf. Ein Hinweis in der Endansicht des Matches fehlt (ADR-036).
 - Turnier mit acht Spielern. Die Mindestzahl für das Auffüllen mit Computern bleibt offen, und der Fall Computer gegen Computer braucht eine Regel.
 - Gemeinsames Eingabefeld für Duell-Codes und Turnier-Codes.
 - Zufälliger Live-Gegner über eine offene Warteschlange.
