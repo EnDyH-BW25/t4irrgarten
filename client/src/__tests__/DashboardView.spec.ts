@@ -42,14 +42,18 @@ describe('DashboardView', () => {
     expect(select.element.value).toBe('schwer')
   })
 
-  it('Neues Spiel zeigt die Auswahl, Live-Gegner ist noch gesperrt', async () => {
+  it('Neues Spiel zeigt die Auswahl, Live-Gegner zeigt Erstellen und Beitreten', async () => {
     serverAttrappe({ '/api/matches/current': keinMatch })
     const { wrapper } = await aufbauen()
     expect(wrapper.find('[data-test=computer-gegner]').exists()).toBe(false)
 
     await wrapper.find('[data-test=neues-spiel]').trigger('click')
     expect(wrapper.find('[data-test=computer-gegner]').exists()).toBe(true)
-    expect(wrapper.find('[data-test=live-gegner]').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('[data-test=duell-erstellen]').exists()).toBe(false)
+
+    await wrapper.find('[data-test=live-gegner]').trigger('click')
+    expect(wrapper.find('[data-test=duell-erstellen]').exists()).toBe(true)
+    expect(wrapper.find('[data-test=duell-beitreten]').exists()).toBe(true)
   })
 
   it('Computer-Gegner legt das Match mit der gewählten Schwierigkeit an und öffnet das Spiel', async () => {
@@ -115,5 +119,105 @@ describe('DashboardView', () => {
     serverAttrappe({ '/api/matches/current': nichtErreichbar })
     const { wrapper } = await aufbauen()
     expect(wrapper.find('[data-test=meldung]').text()).toContain('nicht erreichbar')
+  })
+
+  describe('Live-Gegner', () => {
+    /** Öffnet Neues Spiel und Live-Gegner */
+    async function liveOeffnen(wrapper: Awaited<ReturnType<typeof aufbauen>>['wrapper']) {
+      await wrapper.find('[data-test=neues-spiel]').trigger('click')
+      await wrapper.find('[data-test=live-gegner]').trigger('click')
+    }
+
+    it('Spiel erstellen legt ein Duell an und öffnet den Warteraum', async () => {
+      const attrappe = serverAttrappe({
+        '/api/matches/current': keinMatch,
+        '/api/matches': () =>
+          Response.json(beispielMatch({ id: 'duell', status: 'wartet', code: 'K7M2P' }), {
+            status: 201,
+          }),
+      })
+      const { wrapper, router } = await aufbauen()
+      await liveOeffnen(wrapper)
+      await wrapper.find('[data-test=duell-erstellen]').trigger('click')
+      await flushPromises()
+
+      const anlegen = attrappe.mock.calls.find(([url]) => url === '/api/matches')!
+      expect(JSON.parse(anlegen[1]?.body as string)).toEqual({ modus: 'duell' })
+      expect(router.currentRoute.value.path).toBe('/spiel/duell')
+    })
+
+    it('Beitreten ist erst bei fünf Zeichen aktiv und schickt den Code', async () => {
+      const attrappe = serverAttrappe({
+        '/api/matches/current': keinMatch,
+        '/api/matches/join': () => Response.json(beispielMatch({ id: 'duell', modus: 'duell' })),
+      })
+      const { wrapper, router } = await aufbauen()
+      await liveOeffnen(wrapper)
+      await wrapper.find('[data-test=duell-beitreten]').trigger('click')
+
+      const senden = wrapper.find('[data-test=code-senden]')
+      await wrapper.find('[data-test=code]').setValue('k7m2')
+      expect(senden.attributes('disabled')).toBeDefined()
+      await wrapper.find('[data-test=code]').setValue('k7m2p')
+      expect(senden.attributes('disabled')).toBeUndefined()
+
+      await wrapper.find('form').trigger('submit')
+      await flushPromises()
+      const beitritt = attrappe.mock.calls.find(([url]) => url === '/api/matches/join')!
+      expect(JSON.parse(beitritt[1]?.body as string)).toEqual({ code: 'k7m2p' })
+      expect(router.currentRoute.value.path).toBe('/spiel/duell')
+    })
+
+    it('ungültiger Code zeigt die Meldung des Servers', async () => {
+      serverAttrappe({
+        '/api/matches/current': keinMatch,
+        '/api/matches/join': () =>
+          Response.json(
+            {
+              fehler: {
+                code: 'CODE_UNGUELTIG',
+                nachricht: 'Der Spielcode ist ungültig oder abgelaufen.',
+              },
+            },
+            { status: 404 },
+          ),
+      })
+      const { wrapper, router } = await aufbauen()
+      await liveOeffnen(wrapper)
+      await wrapper.find('[data-test=duell-beitreten]').trigger('click')
+      await wrapper.find('[data-test=code]').setValue('ZZZZZ')
+      await wrapper.find('form').trigger('submit')
+      await flushPromises()
+
+      expect(wrapper.find('[data-test=meldung]').text()).toContain('ungültig oder abgelaufen')
+      expect(router.currentRoute.value.path).toBe('/dashboard')
+    })
+
+    it('ein wartendes Duell erscheint als Warteraum mit Abbrechen', async () => {
+      serverAttrappe({
+        '/api/matches/current': () =>
+          Response.json(beispielMatch({ modus: 'duell', status: 'wartet', code: 'K7M2P' })),
+      })
+      const { wrapper } = await aufbauen()
+      expect(wrapper.find('[data-test=laufend]').text()).toContain('Duell im Warteraum')
+      expect(wrapper.find('[data-test=aufgeben]').text()).toBe('Abbrechen')
+    })
+
+    it('ein laufendes Duell nennt den Namen des Gegners', async () => {
+      serverAttrappe({
+        '/api/matches/current': () =>
+          Response.json(
+            beispielMatch({
+              modus: 'duell',
+              spieler: [
+                { id: 'id-1', name: 'nudl', istComputer: false, anfragen: 0 },
+                { id: 'id-2', name: 'Knödel', istComputer: false, anfragen: 0 },
+              ],
+            }),
+          ),
+      })
+      const { wrapper } = await aufbauen()
+      expect(wrapper.find('[data-test=laufend]').text()).toContain('Gegen Knödel')
+    })
   })
 })

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { ApiFehler } from '../api'
-import { aufgeben, matchAnlegen, offenesMatch } from '../matches'
+import { aufgeben, beitreten, duellAnlegen, matchAnlegen, offenesMatch } from '../matches'
 import { beispielMatch, nichtAngemeldet, nichtErreichbar, serverAttrappe } from './hilfen'
 
 afterEach(() => vi.unstubAllGlobals())
@@ -25,6 +25,24 @@ describe('matchAnlegen', () => {
       schwierigkeit: 'schwer',
     })
     expect(match.id).toBe('match-1')
+  })
+})
+
+describe('duellAnlegen und beitreten', () => {
+  it('duellAnlegen schickt nur den Modus duell', async () => {
+    const attrappe = serverAttrappe({
+      '/api/matches': () => Response.json(beispielMatch({ status: 'wartet' }), { status: 201 }),
+    })
+    expect((await duellAnlegen()).status).toBe('wartet')
+    expect(JSON.parse(attrappe.mock.calls[0]![1]?.body as string)).toEqual({ modus: 'duell' })
+  })
+
+  it('beitreten schickt den Code an /matches/join', async () => {
+    const attrappe = serverAttrappe({ '/api/matches/join': () => Response.json(beispielMatch()) })
+    await beitreten('K7M2P')
+    const [, optionen] = attrappe.mock.calls[0]!
+    expect(optionen?.method).toBe('POST')
+    expect(JSON.parse(optionen?.body as string)).toEqual({ code: 'K7M2P' })
   })
 })
 

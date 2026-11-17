@@ -6,6 +6,16 @@ export function matchAnlegen(schwierigkeit: Schwierigkeit): Promise<Match> {
   return post<Match>('/matches', { modus: 'computer', schwierigkeit })
 }
 
+/** Legt ein Duell an. Die Antwort enthält den Spielcode für den Warteraum. */
+export function duellAnlegen(): Promise<Match> {
+  return post<Match>('/matches', { modus: 'duell' })
+}
+
+/** Tritt einem Duell mit dem Code bei. Der Server ignoriert Groß- und Kleinschreibung. */
+export function beitreten(code: string): Promise<Match> {
+  return post<Match>('/matches/join', { code })
+}
+
 /** Liefert das offene Match oder null, wenn es keines gibt */
 export async function offenesMatch(): Promise<Match | null> {
   try {
