@@ -1,3 +1,10 @@
+/**
+ * WEGBEWERTUNG: Wie schwer ist eine Zelle zu finden? (ADR-025, für die Schatzwahl im Generator)
+ * Idee: Nicht die Weglänge macht die Suche schwer, sondern
+ *   Abbiegungen  - jede Kurve kostet eine eigene Anfrage (Anfragen gehen nur gerade)
+ *   Abzweigungen - jede Seitenöffnung ist ein möglicher Irrweg
+ * Wertung = Abbiegungen + Abzweigungen. Bei Gleichstand gilt der längere Weg als schwerer.
+ */
 import type { Mauer, Zelle } from '../../shared/types.ts'
 import { mauerZwischen, nachbarn, zuPosition } from './koordinaten.ts'
 
@@ -40,6 +47,7 @@ export function wegBewerten(weg: Zelle[], mauern: Mauer[]): Bewertung {
 
     // Abzweigung: jeder offene Durchgang außer Herkunft und nächstem Schritt
     const offen = nachbarn(weg[i]).filter((n) => !gesperrt.has(mauerZwischen(weg[i], n)))
+    // Start hat keine Herkunft (nur 1 benutzter Durchgang), jede andere Zelle 2
     const benutzt = i > 0 ? 2 : 1
     abzweigungen += offen.length - benutzt
   }
@@ -49,6 +57,7 @@ export function wegBewerten(weg: Zelle[], mauern: Mauer[]): Bewertung {
 
 /** Sortierhilfe: negativ, wenn a schwerer ist als b. Gleichstand entscheidet die Weglänge. */
 export function schwererZuerst(a: Bewertung, b: Bewertung): number {
+  // || greift nur, wenn links 0 steht (Gleichstand): dann entscheidet die Länge
   return wertung(b) - wertung(a) || b.laenge - a.laenge
 }
 

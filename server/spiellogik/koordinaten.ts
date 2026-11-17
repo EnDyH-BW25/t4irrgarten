@@ -1,3 +1,12 @@
+/**
+ * KOORDINATEN: Grundbausteine des 6x6-Rasters (unterste Schicht, alle anderen nutzen sie)
+ * Zwei Darstellungen einer Zelle:
+ *   Text "C4"               für API, JSON und Menschen
+ *   Position {zeile: 2, spalte: 3}  zum Rechnen (beide ab 0)
+ * Mauer = Text "A1_A2" zwischen zwei Nachbarzellen. Normiert: kleinere Zelle zuerst (ADR-021),
+ * damit "A2_A1" und "A1_A2" dieselbe Mauer sind und ein Set sie als gleich erkennt.
+ * Außenwände sind keine Mauern, sie gelten immer (zuZelle liefert außerhalb null).
+ */
 import type { Mauer, Spalte, Zeile, Zelle } from '../../shared/types.ts'
 
 // Ein Buchstabe A-F, danach eine Ziffer 1-6, sonst nichts
@@ -9,7 +18,10 @@ const GROESSE = 6
 /** Lage einer Zelle als Zahlen, beide ab 0 gezählt */
 export type Position = { zeile: number; spalte: number }
 
-/** Prüft, ob ein Text eine gültige Zelle im 6x6-Raster ist, z. B. "C4" */
+/**
+ * Prüft, ob ein Text eine gültige Zelle im 6x6-Raster ist, z. B. "C4"
+ * "text is Zelle" = Type Guard: Nach if (istZelle(t)) weiß TypeScript, dass t eine Zelle ist.
+ */
 export function istZelle(text: string): text is Zelle {
   return ZELLE_MUSTER.test(text)
 }
@@ -37,6 +49,8 @@ export function zuZelle(zeile: number, spalte: number): Zelle | null {
 export function sindNachbarn(a: Zelle, b: Zelle): boolean {
   const pa = zuPosition(a)
   const pb = zuPosition(b)
+  // Manhattan-Abstand: Zeilen- plus Spaltenunterschied. Genau 1 = direkt nebeneinander.
+  // Diagonal ergäbe 2, dieselbe Zelle 0. Beispiel: A1_F6 wird so abgelehnt.
   const abstand = Math.abs(pa.zeile - pb.zeile) + Math.abs(pa.spalte - pb.spalte)
   return abstand === 1
 }
@@ -53,6 +67,7 @@ export function parseMauer(text: string): Mauer | null {
 /** Baut die Mauer zwischen zwei Nachbarzellen, egal in welcher Reihenfolge sie kommen */
 export function mauerZwischen(a: Zelle, b: Zelle): Mauer {
   // Kleinere Zelle zuerst, damit jede Mauer nur eine Schreibweise hat
+  // Textvergleich: "A2" < "B1" (Buchstabe zuerst), "A1" < "A2" (dann Ziffer)
   return a < b ? `${a}_${b}` : `${b}_${a}`
 }
 
@@ -64,7 +79,7 @@ export function zellenDerMauer(mauer: Mauer): [Zelle, Zelle] {
 // Ein Schritt in Zeile und Spalte: oben, rechts, unten, links
 const RICHTUNGEN = [[-1, 0], [0, 1], [1, 0], [0, -1]] as const
 
-/** Liefert alle Zellen, die waagrecht oder senkrecht an eine Zelle grenzen */
+/** Liefert alle Zellen, die waagrecht oder senkrecht an eine Zelle grenzen (Ecke 2, Rand 3, innen 4) */
 export function nachbarn(zelle: Zelle): Zelle[] {
   const { zeile, spalte } = zuPosition(zelle)
   const ergebnis: Zelle[] = []

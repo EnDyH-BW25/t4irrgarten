@@ -1,3 +1,10 @@
+/**
+ * ERREICHBARKEIT: Ist der Schatz von A1 aus erreichbar? (Grundlage der Live-Prüfung, ADR-007)
+ * Algorithmus: Breitensuche (BFS). Das Labyrinth ist ein Graph: Zellen = Knoten,
+ * offene Durchgänge = Kanten. Die Suche färbt von A1 aus Schicht für Schicht alles ein,
+ * was ohne Mauer erreichbar ist. Liegt der Schatz außerhalb, ist das Labyrinth unlösbar.
+ * Aufwand: jede der 36 Zellen höchstens einmal => sehr schnell, darum bei jedem Klick möglich.
+ */
 import type { Mauer, Zelle } from '../../shared/types.ts'
 import { mauerZwischen, nachbarn, zellenDerMauer } from './koordinaten.ts'
 
@@ -11,8 +18,8 @@ export function erreichbareZellen(mauern: Mauer[], start: Zelle = 'A1'): Set<Zel
     // Vorne herausnehmen, hinten anfügen: so wächst der Bereich Schritt für Schritt
     const zelle = warteschlange.shift()!
     for (const nachbar of nachbarn(zelle)) {
-      if (besucht.has(nachbar)) continue
-      if (gesperrt.has(mauerZwischen(zelle, nachbar))) continue
+      if (besucht.has(nachbar)) continue // schon gefunden: nicht doppelt besuchen
+      if (gesperrt.has(mauerZwischen(zelle, nachbar))) continue // Mauer dazwischen
       besucht.add(nachbar)
       warteschlange.push(nachbar)
     }
@@ -41,7 +48,11 @@ export function abstaende(mauern: Mauer[], start: Zelle = 'A1'): Map<Zelle, numb
   return abstand
 }
 
-/** Mauern am Rand des erreichbaren Bereichs: genau eine ihrer beiden Zellen ist erreichbar */
+/**
+ * Mauern am Rand des erreichbaren Bereichs: genau eine ihrer beiden Zellen ist erreichbar
+ * Das sind die rot markierten Mauern im Client. Öffnet man eine davon, wächst der Bereich.
+ * Mauern ganz innen oder ganz außen sind nicht schuld und bleiben unmarkiert.
+ */
 export function problematischeMauern(mauern: Mauer[], erreichbar: Set<Zelle>): Mauer[] {
   return mauern.filter((mauer) => {
     const [a, b] = zellenDerMauer(mauer)

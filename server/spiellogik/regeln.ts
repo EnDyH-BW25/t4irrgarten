@@ -1,3 +1,11 @@
+/**
+ * REGELN FÜR DEN EIGENEN IRRGARTEN: zwei Prüfungen in zwei Stufen
+ * 1. entwurfPruefen: Form (gültige Mauernamen, keine Doppelten, max. 30, Schatz nicht A1).
+ *    Verstoß = kaputte Eingabe => 400. Läuft bei jedem PUT /labyrinth.
+ * 2. loesbarkeitPruefen: Inhalt (Schatz von A1 erreichbar?). Unlösbar ist kein Fehler,
+ *    sondern ein Zwischenstand im Aufbau. Ergebnis geht als "pruefung" an den Client
+ *    (grün/rot, markierte Mauern). Erst "Irrgarten setzen" verlangt loesbar = true (422).
+ */
 import {
   type LabyrinthEntwurf,
   type Mauer,
@@ -25,8 +33,9 @@ export function entwurfPruefen(
   const details: Detail[] = []
   const mauern: Mauer[] = []
 
+  // entries() liefert Index und Wert, der Index steht im Feldnamen, z. B. "mauern[3]"
   for (const [i, text] of eingabe.mauern.entries()) {
-    const mauer = parseMauer(text)
+    const mauer = parseMauer(text) // normiert auch: "A2_A1" wird "A1_A2"
     if (!mauer) {
       details.push({
         feld: `mauern[${i}]`,
@@ -59,6 +68,7 @@ export function entwurfPruefen(
 
 /** Prüft, ob der Schatz von A1 aus erreichbar ist. Markiert sonst die Mauern am Rand. */
 export function loesbarkeitPruefen(entwurf: LabyrinthEntwurf): Pruefung {
+  // Drei Zustände: null = noch kein Schatz (grau), true = lösbar (grün), false = unlösbar (rot)
   if (entwurf.schatz === null) {
     return { loesbar: null, meldung: null, problematischeMauern: [] }
   }

@@ -1,3 +1,10 @@
+/**
+ * AUTOMATIK BEI FRISTENDE: Der Server repariert einen unfertigen Irrgarten (Phase 4)
+ * Fall: Die Aufbauzeit (und die Minute Nachbesserung) ist um, der Spieler hat aber keinen
+ * gültigen Irrgarten. Statt das Spiel abzubrechen, macht der Server ihn spielbar:
+ * fehlender Schatz => zufällig legen; unerreichbarer Schatz => markierte Mauern öffnen.
+ * Aufruf aus match/fristpruefung.ts beim nächsten Abruf nach Fristablauf (ADR-028).
+ */
 import type { Labyrinth, LabyrinthEntwurf, Mauer, Zelle } from '../../shared/types.ts'
 import { erreichbareZellen, problematischeMauern } from './erreichbarkeit.ts'
 import type { Zufall } from './generator.ts'

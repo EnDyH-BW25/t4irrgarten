@@ -1,3 +1,10 @@
+/**
+ * BEKANNTE KARTE: was ein Sucher über das fremde Labyrinth weiß
+ * position (wo die Figur steht), besuchteZellen (Spur), entdeckteMauern (bisher angestoßen).
+ * Der Server führt pro Spieler eine Karte. Der Client zeigt sie im rechten Feld an.
+ * Der Computer-Sucher plant nur mit dieser Karte, nie mit dem echten Labyrinth (fair).
+ * Gegenstück im Client: spurFortschreiben in brett.ts (für die Wiedergabe).
+ */
 import type { AnfrageErgebnis, BekannteKarte, Zelle } from '../../shared/types.ts'
 import { zuPosition, zuZelle } from './koordinaten.ts'
 
