@@ -112,7 +112,7 @@ Deno.test('POST /matches: falsche Eingaben ergeben 400', () =>
     const { anmelden, senden } = await aufbauen(pfad)
     const sid = await anmelden('nudl')
     const falsch = [
-      { modus: 'duell' }, // folgt erst in Phase 4
+      { modus: 'duell', schwierigkeit: 'einfach' }, // im Duell verboten
       { modus: 'computer' }, // Schwierigkeit fehlt
       { modus: 'computer', schwierigkeit: 'extrem' },
       { modus: 'solo', schwierigkeit: 'einfach' },
@@ -487,4 +487,126 @@ Deno.test('ergebnisse: Aufgeben im Aufbau zählt als Niederlage', () =>
 
     const [eintrag] = ergebnisse.vonNutzer(await nutzerId(ich, sid))
     assertEquals([eintrag.ausgang, eintrag.endegrund], ['niederlage', 'aufgabe'])
+  }))
+
+// ---------- Duell ----------
+
+/** Anna erstellt ein Duell. Liefert ihre Session, die Match-Id und den Code. */
+async function duellAnlegen(app: Awaited<ReturnType<typeof aufbauen>>) {
+  const anna = await app.anmelden('anna')
+  const res = await app.senden(anna, 'POST', '', { modus: 'duell' })
+  const match: Match = await res.json()
+  return { anna, id: match.id, code: match.code!, res, match }
+}
+
+Deno.test('POST /matches duell: wartet mit Code, ohne Schwierigkeit', () =>
+  mitTempOrdner(async (pfad) => {
+    const app = await aufbauen(pfad)
+    const { res, match } = await duellAnlegen(app)
+
+    assertEquals(res.status, 201)
+    assertEquals(match.status, 'wartet')
+    assertEquals(match.modus, 'duell')
+    assertEquals(match.schwierigkeit, null)
+    assert(/^[A-HJ-NP-Z2-9]{5}$/.test(match.code!), `Code ${match.code}`)
+    assertEquals(match.codeEndeAm, new Date(JETZT.getTime() + 10 * 60 * 1000).toISOString())
+    assertEquals(match.spieler.map((s) => s.name), ['anna'])
+  }))
+
+Deno.test('POST /join: Code in Kleinbuchstaben, beide sind danach im Aufbau', () =>
+  mitTempOrdner(async (pfad) => {
+    const app = await aufbauen(pfad)
+    const { anna, id, code } = await duellAnlegen(app)
+    const ben = await app.anmelden('ben')
+
+    const res = await app.senden(ben, 'POST', '/join', { code: ` ${code.toLowerCase()} ` })
+    assertEquals(res.status, 200)
+    const sichtBen: Match = await res.json()
+    assertEquals(sichtBen.id, id)
+    assertEquals(sichtBen.status, 'aufbau')
+    assertEquals(sichtBen.spieler.map((s) => s.name), ['anna', 'ben'])
+
+    // Anna sieht beim nächsten Abruf den Aufbau, der Code ist weg
+    const sichtAnna: Match = await (await app.senden(anna, 'GET', `/${id}`)).json()
+    assertEquals([sichtAnna.status, sichtAnna.code], ['aufbau', null])
+  }))
+
+Deno.test('POST /join: falsche Form 400, unbekannter Code 404, eigener Code 409', () =>
+  mitTempOrdner(async (pfad) => {
+    const app = await aufbauen(pfad)
+    const { anna, code } = await duellAnlegen(app)
+    const ben = await app.anmelden('ben')
+
+    for (const body of [{}, { code: 12345 }, { code: 'K7M2' }, { code: 'K7M2O' }, '{kaputt']) {
+      await fehler(await app.senden(ben, 'POST', '/join', body), 400, 'VALIDIERUNG')
+    }
+    const anderer = code === 'ZZZZZ' ? 'YYYYY' : 'ZZZZZ'
+    await fehler(await app.senden(ben, 'POST', '/join', { code: anderer }), 404, 'CODE_UNGUELTIG')
+    await fehler(await app.senden(anna, 'POST', '/join', { code }), 409, 'KONFLIKT')
+  }))
+
+Deno.test('POST /join: Code nach 10 Minuten abgelaufen, Anna ist wieder frei', () =>
+  mitTempOrdner(async (pfad) => {
+    const app = await aufbauen(pfad)
+    const { anna, code } = await duellAnlegen(app)
+    const ben = await app.anmelden('ben')
+
+    app.vorspulen(10 * 60 * 1000)
+    await fehler(await app.senden(ben, 'POST', '/join', { code }), 404, 'CODE_UNGUELTIG')
+    // Das Duell ist abgebrochen: Anna kann sofort ein neues Spiel anlegen
+    assertEquals((await app.senden(anna, 'POST', '', { modus: 'duell' })).status, 201)
+  }))
+
+Deno.test('POST /join: ein Code gilt nur einmal, Spieler mit offenem Match bekommt 409', () =>
+  mitTempOrdner(async (pfad) => {
+    const app = await aufbauen(pfad)
+    const { code } = await duellAnlegen(app)
+    const ben = await app.anmelden('ben')
+    const cem = await app.anmelden('cem')
+
+    assertEquals((await app.senden(ben, 'POST', '/join', { code })).status, 200)
+    await fehler(await app.senden(cem, 'POST', '/join', { code }), 404, 'CODE_UNGUELTIG')
+
+    // Ben spielt jetzt und kann keinem weiteren Duell beitreten
+    const dana = await app.anmelden('dana')
+    const zweites: Match = await (await app.senden(dana, 'POST', '', { modus: 'duell' })).json()
+    await fehler(await app.senden(ben, 'POST', '/join', { code: zweites.code }), 409, 'KONFLIKT')
+  }))
+
+Deno.test('resign im Warteraum: abgebrochen, kein Ergebnis', () =>
+  mitTempOrdner(async (pfad) => {
+    const app = await aufbauen(pfad)
+    const { anna, id } = await duellAnlegen(app)
+    const res = await app.senden(anna, 'POST', `/${id}/resign`)
+    assertEquals((await res.json()).status, 'abgebrochen')
+    assertEquals(app.ergebnisse.vonNutzer((await app.ich(anna)).id), [])
+  }))
+
+Deno.test('Duell über die Routen: Ben sieht Annas Anfrage, Schatz ergibt zwei Ergebnisse', () =>
+  mitTempOrdner(async (pfad) => {
+    const app = await aufbauen(pfad)
+    const { anna, id, code } = await duellAnlegen(app)
+    const ben = await app.anmelden('ben')
+    await app.senden(ben, 'POST', '/join', { code })
+
+    await app.senden(anna, 'PUT', `/${id}/labyrinth`, { schatz: 'F6', mauern: [] })
+    await app.senden(ben, 'PUT', `/${id}/labyrinth`, { schatz: 'A3', mauern: ['A1_B1'] })
+    for (const sid of [anna, ben]) await app.senden(sid, 'POST', `/${id}/labyrinth/place`)
+    for (const sid of [anna, ben]) await app.senden(sid, 'POST', `/${id}/ready`)
+
+    // Zufall 0: Anna beginnt. A2 ist frei: ja, Anna bleibt am Zug.
+    const antwort: AnfrageAntwort = await (
+      await app.senden(anna, 'POST', `/${id}/queries`, { anfrageNr: 1, ziel: 'A2' })
+    ).json()
+    assertEquals([antwort.ergebnis, antwort.computerAnfragen], ['ja', null])
+
+    const sichtBen: Match = await (await app.senden(ben, 'GET', `/${id}`)).json()
+    assertEquals(sichtBen.gegnerAnfragen?.map((a) => a.ziel), ['A2'])
+    assertEquals(sichtBen.gegnerKarte?.position, 'A2')
+
+    await app.senden(anna, 'POST', `/${id}/queries`, { anfrageNr: 2, ziel: 'A3' })
+    const ausgaenge = [anna, ben].map(async (sid) =>
+      app.ergebnisse.vonNutzer((await app.ich(sid)).id).map((e) => e.ausgang)
+    )
+    assertEquals(await Promise.all(ausgaenge), [['sieg'], ['niederlage']])
   }))

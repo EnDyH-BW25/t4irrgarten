@@ -1,6 +1,6 @@
 import { Hono } from '@hono/hono'
 import type { Context } from '@hono/hono'
-import type { AnfrageAntwort, Schwierigkeit } from '../../shared/types.ts'
+import type { AnfrageAntwort, MatchAnlegen, Schwierigkeit } from '../../shared/types.ts'
 import { anmeldungPruefen, type AuthUmgebung } from '../auth/anmeldung.ts'
 import type { NutzerSpeicher } from '../auth/nutzerSpeicher.ts'
 import type { Sessions } from '../auth/sessions.ts'
@@ -10,8 +10,10 @@ import type { Zufall } from '../spiellogik/generator.ts'
 import {
   anfrageStellen,
   aufgeben,
+  beitreten,
   bereitBestaetigen,
   computerMatchErstellen,
+  duellErstellen,
   entwurfSpeichern,
   labyrinthSetzen,
   teilnehmer,
@@ -19,6 +21,7 @@ import {
 import { ansichtFuer } from './ansicht.ts'
 import { ergebnisseAus } from './ergebnis.ts'
 import { abrufMerken, fristenPruefen } from './fristpruefung.ts'
+import { CODE_ZEICHEN, codeNormieren, freienCodeErzeugen } from './spielcode.ts'
 import type { MatchSpeicher } from './speicher.ts'
 import type { MatchIntern } from './typen.ts'
 
@@ -79,14 +82,43 @@ export function matchRouten(
 
   routen.post('/', async (c) => {
     const nutzer = c.get('nutzer')
-    const schwierigkeit = matchAnlegenLesen(await jsonLesen(c))
+    const eingabe = matchAnlegenLesen(await jsonLesen(c))
     if (await offenesMatch(nutzer.id)) {
       throw new ApiFehler(409, 'KONFLIKT', 'Du spielst bereits ein Match.')
     }
-    const match = computerMatchErstellen(nutzer, schwierigkeit, uhr(), zufall)
+
+    if (eingabe.modus === 'duell') {
+      // Der Code darf keinem anderen wartenden Duell gehören
+      const code = freienCodeErzeugen((kandidat) => matches.nachCode(kandidat) !== null, zufall)
+      const match = duellErstellen(nutzer, code, uhr())
+      matches.anlegen(match)
+      return ansicht(c, match, 201)
+    }
+
+    const match = computerMatchErstellen(nutzer, eingabe.schwierigkeit, uhr(), zufall)
     matches.anlegen(match)
-    await nutzerSpeicher.schwierigkeitMerken(nutzer.id, schwierigkeit)
+    await nutzerSpeicher.schwierigkeitMerken(nutzer.id, eingabe.schwierigkeit)
     return ansicht(c, match, 201)
+  })
+
+  // Steht vor /:id, sonst hielte Hono "join" für eine Match-Id
+  routen.post('/join', async (c) => {
+    const nutzer = c.get('nutzer')
+    const code = codeLesen(await jsonLesen(c))
+
+    // Erst die Fristen des gefundenen Duells: Ein abgelaufener Code gilt nicht mehr
+    const match = matches.nachCode(code)
+    if (match) fristenPruefen(match, uhr(), zufall)
+    if (!match || match.status !== 'wartet') {
+      throw new ApiFehler(404, 'CODE_UNGUELTIG', 'Der Spielcode ist ungültig oder abgelaufen.')
+    }
+    // Auch das eigene wartende Duell zählt als offenes Match: Der Ersteller bekommt hier 409
+    if (await offenesMatch(nutzer.id)) {
+      throw new ApiFehler(409, 'KONFLIKT', 'Du kannst diesem Spiel nicht beitreten.')
+    }
+
+    beitreten(match, nutzer, uhr())
+    return ansicht(c, match)
   })
 
   // Steht vor /:id, sonst hielte Hono "current" für eine Match-Id
@@ -155,8 +187,8 @@ function jsonLesen(c: Context): Promise<unknown> {
   return c.req.json().catch(() => null)
 }
 
-/** Body von POST /matches. In Phase 3 gibt es nur den Modus computer. */
-function matchAnlegenLesen(eingabe: unknown): Schwierigkeit {
+/** Body von POST /matches. Die Schwierigkeit ist im Modus computer Pflicht, im Duell verboten. */
+function matchAnlegenLesen(eingabe: unknown): MatchAnlegen {
   const ungueltig = (feld: string, problem: string) =>
     new ApiFehler(400, 'VALIDIERUNG', 'Eingabe ungültig.', { details: [{ feld, problem }] })
 
@@ -164,12 +196,33 @@ function matchAnlegenLesen(eingabe: unknown): Schwierigkeit {
     throw ungueltig('body', 'Erwartet wird ein JSON-Objekt.')
   }
   const { modus, schwierigkeit } = eingabe as Record<string, unknown>
-  if (modus === 'duell') throw ungueltig('modus', 'Das Duell folgt in einer späteren Version.')
+  if (modus === 'duell') {
+    if (schwierigkeit !== undefined) {
+      throw ungueltig('schwierigkeit', 'Gegen einen Live-Gegner gibt es keine Schwierigkeit.')
+    }
+    return { modus: 'duell' }
+  }
   if (modus !== 'computer') throw ungueltig('modus', 'Erwartet wird computer oder duell.')
   if (!SCHWIERIGKEITEN.includes(schwierigkeit as Schwierigkeit)) {
     throw ungueltig('schwierigkeit', 'Erwartet wird einfach, standard oder schwer.')
   }
-  return schwierigkeit as Schwierigkeit
+  return { modus: 'computer', schwierigkeit: schwierigkeit as Schwierigkeit }
+}
+
+/** Erlaubte Form eines Codes nach dem Normieren, wie das Muster Code in der openapi.yaml */
+const CODE_MUSTER = new RegExp(`^[${CODE_ZEICHEN}]{5}$`)
+
+/** Body von POST /matches/join. Kleinbuchstaben und Leerzeichen am Rand sind erlaubt. */
+function codeLesen(eingabe: unknown): string {
+  const code = typeof eingabe === 'object' && eingabe !== null
+    ? (eingabe as Record<string, unknown>).code
+    : undefined
+  if (typeof code !== 'string' || !CODE_MUSTER.test(codeNormieren(code))) {
+    throw new ApiFehler(400, 'VALIDIERUNG', 'Eingabe ungültig.', {
+      details: [{ feld: 'code', problem: 'Erwartet werden fünf Zeichen ohne 0, O, 1 und I.' }],
+    })
+  }
+  return codeNormieren(code)
 }
 
 /** Query-Parameter since: fehlt er, gibt es keinen Vergleich */
