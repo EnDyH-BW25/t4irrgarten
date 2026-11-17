@@ -1,3 +1,11 @@
+<!--
+  LABYRINTHFELD: die einzige eigene Komponente, SpielView nutzt sie zweimal
+  (links mein Irrgarten in Blau, rechts der Irrgarten des Gegners in Orange).
+  Prinzip "dumme Komponente": Daten kommen per Props herein, Klicks gehen per Emit hinaus.
+  Die Komponente kennt weder Server noch Spielregeln. So bleibt sie leicht testbar
+  (LabyrinthFeld.spec.ts) und funktioniert im Aufbau und in der Spielphase gleich.
+  Datenfluss: SpielView => Props => LabyrinthFeld => emit('mauer'/'zelle') => SpielView
+-->
 <script setup lang="ts">
 import { computed } from 'vue'
 import { IconDiamond, IconGhost2, IconRobot } from '@tabler/icons-vue'
@@ -7,6 +15,9 @@ import { SPALTEN, zelle, ZEILEN } from '@/brett'
 /**
  * Ein 6x6-Feld. Die Komponente zeigt nur an und meldet Klicks nach oben.
  * Was ein Klick bewirkt, entscheidet die View.
+ * defineProps<{...}>: Props mit TypeScript-Typen. ? = optional.
+ * withDefaults: Standardwerte für optionale Props. Listen als Funktion () => [],
+ * damit nicht alle Feld-Instanzen dieselbe Liste teilen.
  */
 const props = withDefaults(
   defineProps<{
@@ -31,17 +42,25 @@ const props = withDefaults(
   },
 )
 
+// Zwei Ereignisse nach oben: "Mauer angeklickt" und "Zelle angeklickt", jeweils mit Namen.
+// Im Elternteil: <LabyrinthFeld @mauer="..." @zelle="..." />
 const emit = defineEmits<{ mauer: [mauer: Mauer]; zelle: [zelle: Zelle] }>()
 
 /**
  * Raster mit 1 Beschriftungsspur und 11 Spuren je Richtung: 6 Zellen, dazwischen 5 Mauerplätze.
  * Zelle (z, s) liegt auf Rasterzeile 2 + 2z und Rasterspalte 2 + 2s (beides ab 0 gezählt).
+ * Spuren: [Beschriftung] [Zelle] [Mauer] [Zelle] [Mauer] ... [Zelle] = 1 + 6 + 5 = 12 Spuren.
+ * Beispiel: A1 liegt auf Zeile 2 / Spalte 2, die Mauer A1_A2 rechts daneben auf Spalte 3.
+ * Mauern sind also eigene Rasterplätze (schmale 0.6rem-Spuren), keine Ränder der Zellen.
+ * minmax(0, 1fr): Zellen teilen sich den restlichen Platz gleichmäßig.
  */
 const RASTER = '1.5rem repeat(5, minmax(0, 1fr) 0.6rem) minmax(0, 1fr)'
 
 type Platz = { zeile: number; spalte: number }
-type MauerPlatz = Platz & { mauer: Mauer }
+type MauerPlatz = Platz & { mauer: Mauer } // & = Schnittmenge: alle Felder von Platz plus mauer
 
+// computed(): abgeleiteter Wert. Vue rechnet ihn nur neu, wenn sich seine Eingaben ändern.
+// 36 Zellen mit Name und Rasterplatz. flatMap macht aus 6 Listen à 6 eine Liste mit 36.
 const zellen = computed(() =>
   ZEILEN.flatMap((z, i) =>
     SPALTEN.map((s, j) => ({ name: zelle(z, s), zeile: 2 + 2 * i, spalte: 2 + 2 * j })),
@@ -51,6 +70,10 @@ const zellen = computed(() =>
 /**
  * Alle 60 Mauerplätze. Die Namen entstehen von links nach rechts und von oben nach unten,
  * die kleinere Zelle steht dadurch vorn, wie es der Server erwartet (ADR-021).
+ * Rechnung: 6 Zeilen x 5 Mauern nach rechts + 5 Zeilen x 6 Mauern nach unten = 30 + 30 = 60.
+ * Jede Zelle erzeugt höchstens zwei Mauern: zum rechten und zum unteren Nachbarn.
+ * Die letzte Spalte hat keinen rechten Nachbarn (rechts = undefined), die letzte Zeile
+ * keinen unteren. Außenwände gibt es nicht als Mauerplatz, sie gelten immer.
  */
 const mauerPlaetze = computed(() => {
   const plaetze: MauerPlatz[] = []
@@ -70,11 +93,13 @@ const mauerPlaetze = computed(() => {
   return plaetze
 })
 
+// Listen als Set: .has() findet einen Eintrag direkt, statt die ganze Liste zu durchsuchen
 const gesetzt = computed(() => new Set(props.mauern))
 const markiert = computed(() => new Set(props.markierteMauern))
 const besucht = computed(() => new Set(props.besucht))
 const ziele = computed(() => new Set(props.ziele))
 
+// Klickbar im Aufbau (jede Zelle, für den Schatz) oder im Spiel (nur gültige Anfrageziele)
 const zelleKlickbar = (z: Zelle) => props.bearbeitbar || ziele.value.has(z)
 
 // Farben aus design.md; volle Klassennamen, damit Tailwind sie findet
@@ -97,18 +122,21 @@ const figurIcon = computed(() => (props.art === 'eigen' ? IconRobot : IconGhost2
  */
 const aufSchatz = computed(() => props.figur !== null && props.figur === props.schatz)
 
+/** CSS-Klasse eines Mauerplatzes: leer (Hover nur im Aufbau), rot (problematisch) oder Feldfarbe */
 function mauerKlasse(m: Mauer): string {
   if (!gesetzt.value.has(m)) return props.bearbeitbar ? 'hover:bg-slate-400/60' : ''
   // Rot nur, solange die Mauer noch steht; die Prüfung des Servers kann kurz hinterherhinken
   return markiert.value.has(m) ? 'bg-red-600' : mauerFarbe.value
 }
 
+// Inline-Style für den Rasterplatz, z. B. { gridRow: 2, gridColumn: 3 }
 const lage = (p: Platz) => ({ gridRow: p.zeile, gridColumn: p.spalte })
 
 /**
  * Die Figur liegt in einer eigenen Ebene über dem Raster und gleitet per CSS-Übergang
  * von Feld zu Feld. Ein Grid-Platz lässt sich nicht animieren, left und top schon.
  * In der Ebene ist ein Feld (100% - 3rem) / 6 breit, dazu kommen 0.6rem Mauerplatz.
+ * 3rem = 5 Mauerplätze x 0.6rem. Beispiel C4: i = 2, j = 3 => 3 Felder + 3 Mauern nach rechts.
  */
 const FELD = '((100% - 3rem) / 6)'
 const figurLage = computed(() => {
@@ -147,7 +175,8 @@ const figurLage = computed(() => {
       {{ z }}
     </span>
 
-    <!-- Zellen -->
+    <!-- Zellen: echte <button>, damit Tastatur und Screenreader sie bedienen können -->
+    <!-- :disabled sperrt Zellen, die gerade nichts bewirken; @click meldet den Klick per Emit -->
     <button
       v-for="z in zellen"
       :key="z.name"
@@ -171,6 +200,7 @@ const figurLage = computed(() => {
         class="absolute inset-0 rounded-sm ring-4 ring-slate-900 ring-inset motion-safe:animate-pulse"
       />
       <!-- Plättchen: Größe relativ zum Feld, damit es in beiden Irrgärten gleich wirkt -->
+      <!-- Transition: Vue setzt beim Erscheinen Klassen wie .plaettchen-enter-active (unten im CSS) -->
       <Transition name="plaettchen">
         <span
           v-if="besucht.has(z.name)"
@@ -200,7 +230,8 @@ const figurLage = computed(() => {
       </Transition>
     </button>
 
-    <!-- Mauerplätze zwischen den Zellen -->
+    <!-- Mauerplätze zwischen den Zellen (60 Stück), nur im Aufbau klickbar -->
+    <!-- aria-pressed: Umschalter-Zustand für Screenreader (Mauer gesetzt ja/nein) -->
     <button
       v-for="p in mauerPlaetze"
       :key="p.mauer"
@@ -228,6 +259,7 @@ const figurLage = computed(() => {
           class="figur absolute flex items-center justify-center"
           :style="figurLage"
         >
+          <!-- <component :is>: dynamische Komponente, hier Roboter oder Geist je nach Feld -->
           <component
             :is="figurIcon"
             :data-test="art === 'eigen' ? 'roboter' : 'geist'"
@@ -242,6 +274,7 @@ const figurLage = computed(() => {
 </template>
 
 <style scoped>
+/* scoped: Diese Regeln gelten nur in dieser Komponente, nicht in der ganzen App */
 /* Die Figur gleitet zum nächsten Feld */
 .figur {
   transition:
