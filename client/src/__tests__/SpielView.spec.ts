@@ -814,7 +814,7 @@ describe('SpielView im Duell (Phase 5)', () => {
     expect(wrapper.find('[data-test=setzen]').exists()).toBe(true)
   })
 
-  it('Live-Kasten zeigt die Anfragen des Gegners, neueste oben', async () => {
+  it('zeigt keine Liste der Anfragen; die Anfragebox nennt, wer am Zug ist (ADR-040)', async () => {
     serverAttrappe({
       '/api/matches/match-1': () =>
         Response.json(
@@ -827,13 +827,32 @@ describe('SpielView im Duell (Phase 5)', () => {
         ),
     })
     const { wrapper } = await aufbauen()
-    const kasten = wrapper.find('[data-test=live-kasten]')
 
-    expect(kasten.text()).toContain('Ben sucht deinen Schatz')
-    expect(kasten.text()).toContain('2 Anfragen')
-    const zeilen = kasten.findAll('[data-test=live-liste] li').map((li) => li.text())
-    expect(zeilen).toEqual(['D3? → Nur bis C3, dann eine Mauer', 'A3? → Ja, weiter auf A3'])
+    expect(wrapper.find('[data-test=live-kasten]').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('D3? →')
     expect(wrapper.find('[data-test=zug]').text()).toBe('Ben ist am Zug.')
+  })
+
+  it('zählt die Anfragen beider Spieler am Ende wie gegen den Computer', async () => {
+    serverAttrappe({
+      '/api/matches/match-1': () =>
+        Response.json(
+          duell({
+            status: 'beendet',
+            zugEndeAm: null,
+            amZug: null,
+            siegerId: 'id-2',
+            endegrund: 'schatz',
+            spieler: [
+              { ...ANNA, anfragen: 9 },
+              { ...BEN, anfragen: 11 },
+            ],
+          }),
+        ),
+    })
+    const { wrapper } = await aufbauen()
+    const text = wrapper.find('[data-test=anfragen]').text().replace(/\s+/g, ' ')
+    expect(text).toBe('Anfragen: Du 9 · Ben 11')
   })
 
   it('Anfragebox spielt neue Anfragen des Gegners aus dem Polling nach', async () => {
@@ -876,19 +895,6 @@ describe('SpielView im Duell (Phase 5)', () => {
     expect(wrapper.find('[data-test=antwort-offen]').exists()).toBe(true)
     await vi.advanceTimersByTimeAsync((FRAGE * 2) / 3)
     expect(wrapper.find('[data-test=antwort]').text()).toBe('Nur bis B3, dann eine Mauer')
-  })
-
-  it('Live-Kasten ohne Anfragen sagt das; gegen den Computer gibt es ihn nicht', async () => {
-    serverAttrappe({ '/api/matches/match-1': () => Response.json(duell()) })
-    const { wrapper } = await aufbauen()
-    expect(wrapper.find('[data-test=live-kasten]').text()).toContain('Noch keine Anfragen')
-    wrapper.unmount()
-
-    serverAttrappe({
-      '/api/matches/match-1': () => Response.json(duell({ modus: 'computer' })),
-    })
-    const computer = await aufbauen()
-    expect(computer.wrapper.find('[data-test=live-kasten]').exists()).toBe(false)
   })
 
   it('abgelaufener Code: "Niemand ist beigetreten" statt "Keiner war bereit"', async () => {

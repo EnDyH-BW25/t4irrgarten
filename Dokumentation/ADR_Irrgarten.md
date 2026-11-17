@@ -11,47 +11,48 @@ Die Übersicht trennt zwei Angaben.
 
 ## Übersicht
 
-| Nr      | Titel                                               | Phase       | Status                                   | Umsetzung |
-| ------- | --------------------------------------------------- | ----------- | ---------------------------------------- | --------- |
-| ADR-001 | Anwendungsfälle in Klartext vor dem API-Vertrag     | Planung     | Akzeptiert                               | umgesetzt |
-| ADR-002 | Server als Schiedsrichter                           | Planung     | Akzeptiert                               | umgesetzt |
-| ADR-003 | Koordinaten und Mauermodell                         | Planung     | Akzeptiert                               | umgesetzt |
-| ADR-004 | Labyrinth-Generierung und Schwierigkeit             | Planung     | Akzeptiert                               | umgesetzt |
-| ADR-005 | Anfragen entlang von Zeile oder Spalte              | Planung     | Akzeptiert                               | umgesetzt |
-| ADR-006 | Aufbauphase unter Kontrolle des Servers             | Planung     | Akzeptiert                               | teilweise |
-| ADR-007 | Lösbarkeitsprüfung mit Nachbesserung                | Planung     | Akzeptiert                               | umgesetzt |
-| ADR-008 | Bereitschaftsprüfung und Abwesenheit                | Planung     | Akzeptiert                               | umgesetzt |
-| ADR-009 | Spielcode für das Duell                             | Planung     | Akzeptiert                               | umgesetzt |
-| ADR-010 | Turnier mit Host, Warteraum und Computer-Auffüllung | Planung     | Akzeptiert                               | umgesetzt |
-| ADR-011 | Turnierablauf, Ausstieg und Abbruch                 | Planung     | Akzeptiert                               | umgesetzt |
-| ADR-012 | Aktualisierung per Polling                          | Planung     | Akzeptiert                               | teilweise |
-| ADR-013 | Kein Gastmodus                                      | Planung     | Akzeptiert                               | umgesetzt |
-| ADR-014 | Ergebnisse vom Server, Statistik statt Rangliste    | Planung     | Akzeptiert                               | umgesetzt |
-| ADR-015 | Dashboard, Schwierigkeit und Einstellungen          | Planung     | Akzeptiert                               | teilweise |
-| ADR-016 | Technologie-Stack                                   | Einrichtung | Akzeptiert                               | umgesetzt |
-| ADR-017 | Gemeinsame Typen im Ordner shared                   | 0           | Akzeptiert                               | umgesetzt |
-| ADR-018 | Einheitliches Fehlerformat im Server                | 0           | Akzeptiert                               | umgesetzt |
-| ADR-019 | API-Modul im Client mit Netzwerkfehler              | 0           | Akzeptiert                               | umgesetzt |
-| ADR-020 | Vite-Proxy statt CORS                               | 0           | Akzeptiert                               | umgesetzt |
-| ADR-021 | Mauern als normierte Strings und reine Funktionen   | 1           | Akzeptiert                               | umgesetzt |
-| ADR-022 | Passwort-Hash mit PBKDF2                            | 2           | Akzeptiert                               | umgesetzt |
-| ADR-023 | Sessions im Speicher und Nutzer in JSON-Datei       | 2           | Akzeptiert                               | umgesetzt |
-| ADR-024 | Anmeldezustand im Client und geschützte Routen      | 2           | Akzeptiert                               | umgesetzt |
-| ADR-025 | Schatzplatzierung nach Schwierigkeit des Wegs       | 3           | Akzeptiert                               | umgesetzt |
-| ADR-026 | Match-Schicht im Speicher mit eigener Ansicht       | 3           | Akzeptiert                               | umgesetzt |
-| ADR-027 | Offenes Match und Schwierigkeit im Account          | 3           | Akzeptiert                               | umgesetzt |
-| ADR-028 | Fristen ohne Timer bei jedem Zugriff                | 4           | Akzeptiert                               | umgesetzt |
-| ADR-029 | Ergebnisse in einer JSON-Datei beim Spielende       | 4           | Akzeptiert                               | umgesetzt |
-| ADR-030 | Zugfrist erst nach der Wiedergabe des Computerzugs  | 4           | Akzeptiert, Pause geändert durch ADR-037 | umgesetzt |
-| ADR-031 | Live-Sicht über die Anfrageliste des Gegners        | 5           | Akzeptiert                               | umgesetzt |
-| ADR-032 | Warteraum als Status der Spielansicht               | 5           | Akzeptiert                               | umgesetzt |
-| ADR-033 | Ergebnisse seitenweise und nach dem offenen Match   | 6           | Akzeptiert                               | umgesetzt |
-| ADR-034 | Turnier als Hülle um normale Matches                | 7           | Akzeptiert                               | umgesetzt |
-| ADR-035 | Ausscheiden, Walkover und Abbruch im Turnier        | 7           | Akzeptiert                               | umgesetzt |
-| ADR-036 | Turnierseite als Warteraum und Wartebildschirm      | 7           | Akzeptiert                               | umgesetzt |
-| ADR-037 | Anfragebox mit Anfrage vor der Antwort              | 8           | Akzeptiert                               | umgesetzt |
-| ADR-038 | Ausblick: Antwort durch den Gegner                  | 8           | Vorgeschlagen                            | geplant   |
-| ADR-039 | Account-Wechsel zwischen Tabs erkennen              | 8           | Akzeptiert                               | umgesetzt |
+| Nr      | Titel                                               | Phase       | Status                                    | Umsetzung |
+| ------- | --------------------------------------------------- | ----------- | ----------------------------------------- | --------- |
+| ADR-001 | Anwendungsfälle in Klartext vor dem API-Vertrag     | Planung     | Akzeptiert                                | umgesetzt |
+| ADR-002 | Server als Schiedsrichter                           | Planung     | Akzeptiert                                | umgesetzt |
+| ADR-003 | Koordinaten und Mauermodell                         | Planung     | Akzeptiert                                | umgesetzt |
+| ADR-004 | Labyrinth-Generierung und Schwierigkeit             | Planung     | Akzeptiert                                | umgesetzt |
+| ADR-005 | Anfragen entlang von Zeile oder Spalte              | Planung     | Akzeptiert                                | umgesetzt |
+| ADR-006 | Aufbauphase unter Kontrolle des Servers             | Planung     | Akzeptiert                                | teilweise |
+| ADR-007 | Lösbarkeitsprüfung mit Nachbesserung                | Planung     | Akzeptiert                                | umgesetzt |
+| ADR-008 | Bereitschaftsprüfung und Abwesenheit                | Planung     | Akzeptiert                                | umgesetzt |
+| ADR-009 | Spielcode für das Duell                             | Planung     | Akzeptiert                                | umgesetzt |
+| ADR-010 | Turnier mit Host, Warteraum und Computer-Auffüllung | Planung     | Akzeptiert                                | umgesetzt |
+| ADR-011 | Turnierablauf, Ausstieg und Abbruch                 | Planung     | Akzeptiert                                | umgesetzt |
+| ADR-012 | Aktualisierung per Polling                          | Planung     | Akzeptiert                                | teilweise |
+| ADR-013 | Kein Gastmodus                                      | Planung     | Akzeptiert                                | umgesetzt |
+| ADR-014 | Ergebnisse vom Server, Statistik statt Rangliste    | Planung     | Akzeptiert                                | umgesetzt |
+| ADR-015 | Dashboard, Schwierigkeit und Einstellungen          | Planung     | Akzeptiert                                | teilweise |
+| ADR-016 | Technologie-Stack                                   | Einrichtung | Akzeptiert                                | umgesetzt |
+| ADR-017 | Gemeinsame Typen im Ordner shared                   | 0           | Akzeptiert                                | umgesetzt |
+| ADR-018 | Einheitliches Fehlerformat im Server                | 0           | Akzeptiert                                | umgesetzt |
+| ADR-019 | API-Modul im Client mit Netzwerkfehler              | 0           | Akzeptiert                                | umgesetzt |
+| ADR-020 | Vite-Proxy statt CORS                               | 0           | Akzeptiert                                | umgesetzt |
+| ADR-021 | Mauern als normierte Strings und reine Funktionen   | 1           | Akzeptiert                                | umgesetzt |
+| ADR-022 | Passwort-Hash mit PBKDF2                            | 2           | Akzeptiert                                | umgesetzt |
+| ADR-023 | Sessions im Speicher und Nutzer in JSON-Datei       | 2           | Akzeptiert                                | umgesetzt |
+| ADR-024 | Anmeldezustand im Client und geschützte Routen      | 2           | Akzeptiert                                | umgesetzt |
+| ADR-025 | Schatzplatzierung nach Schwierigkeit des Wegs       | 3           | Akzeptiert                                | umgesetzt |
+| ADR-026 | Match-Schicht im Speicher mit eigener Ansicht       | 3           | Akzeptiert                                | umgesetzt |
+| ADR-027 | Offenes Match und Schwierigkeit im Account          | 3           | Akzeptiert                                | umgesetzt |
+| ADR-028 | Fristen ohne Timer bei jedem Zugriff                | 4           | Akzeptiert                                | umgesetzt |
+| ADR-029 | Ergebnisse in einer JSON-Datei beim Spielende       | 4           | Akzeptiert                                | umgesetzt |
+| ADR-030 | Zugfrist erst nach der Wiedergabe des Computerzugs  | 4           | Akzeptiert, Pause geändert durch ADR-037  | umgesetzt |
+| ADR-031 | Live-Sicht über die Anfrageliste des Gegners        | 5           | Akzeptiert, Kasten entfällt durch ADR-040 | umgesetzt |
+| ADR-032 | Warteraum als Status der Spielansicht               | 5           | Akzeptiert                                | umgesetzt |
+| ADR-033 | Ergebnisse seitenweise und nach dem offenen Match   | 6           | Akzeptiert                                | umgesetzt |
+| ADR-034 | Turnier als Hülle um normale Matches                | 7           | Akzeptiert                                | umgesetzt |
+| ADR-035 | Ausscheiden, Walkover und Abbruch im Turnier        | 7           | Akzeptiert                                | umgesetzt |
+| ADR-036 | Turnierseite als Warteraum und Wartebildschirm      | 7           | Akzeptiert                                | umgesetzt |
+| ADR-037 | Anfragebox mit Anfrage vor der Antwort              | 8           | Akzeptiert, Kasten entfällt durch ADR-040 | umgesetzt |
+| ADR-038 | Ausblick: Antwort durch den Gegner                  | 8           | Vorgeschlagen                             | geplant   |
+| ADR-039 | Account-Wechsel zwischen Tabs erkennen              | 8           | Akzeptiert                                | umgesetzt |
+| ADR-040 | Duell ohne Live-Kasten                              | 8           | Akzeptiert                                | umgesetzt |
 
 ---
 
@@ -1242,6 +1243,35 @@ Der Ablauf im Test:
 - Zwei Accounts in zwei Tabs desselben Browsers funktionieren weiterhin nicht. Der Fehler fällt jetzt aber sofort auf.
 - Ein Tab mit dem alten Account verliert beim Neuladen ungespeicherte Eingaben. Den Entwurf im Aufbau speichert der Server ohnehin bei jedem Klick.
 - Für den Abgleich der Tabs gibt es keinen automatischen Test. Ihn prüft ein Durchlauf von Hand mit zwei Tabs.
+
+---
+
+## ADR-040 Duell ohne Live-Kasten
+
+### Kontext
+
+Im Duell stand unter der Anfragebox (ADR-037) noch der Live-Kasten aus ADR-031. Er listete alle Anfragen des Gegners mit Antwort, neueste oben. Mit jeder Anfrage wuchs der Kasten bis zu seiner Höhe von etwa zehn Einträgen. Die beiden Spielfelder rutschten dabei immer weiter nach unten. Gegen den Computer gibt es den Kasten nicht.
+
+### Entscheidung
+
+- Der Live-Kasten entfällt. Im Duell sieht die Spielansicht aus wie gegen den Computer.
+- Die Anfragebox zeigt jede Anfrage des Gegners mit Antwort. Das Zielfeld blinkt auf meinem Feld, danach zieht die Figur (ADR-037).
+- Die Zahl der Anfragen steht wie gegen den Computer in der Ergebnisbox am Spielende: "Anfragen: Du 9 · Ben 11".
+- Das Feld `gegnerAnfragen` bleibt im Vertrag. Die Anfragebox braucht es, um neue Anfragen des Gegners aus dem Polling abzuspielen.
+
+### Begründung
+
+- Die Anfragebox erfüllt seit ADR-037 die Forderung des Klartexts. Der Gegner sieht jede Anfrage und jede Antwort live. Der Kasten zeigte dieselben Daten ein zweites Mal.
+- Die Spielfelder bleiben an fester Stelle. Der Spieler muss während des Spiels nicht scrollen.
+- Beide Modi zeigen dieselbe Ansicht. Das spart Sonderfälle in Vorlage und Tests.
+- Verworfen wurde ein Kasten mit fester Höhe neben den Feldern. Er schiebt nichts mehr, verdoppelt aber weiter die Anzeige der Box.
+- Verworfen wurde ein Zähler während des Spiels. Gegen den Computer gibt es ihn auch nicht, und die Spur auf dem Feld zeigt den Fortschritt des Gegners.
+
+### Konsequenzen
+
+- Wer eine Anfrage des Gegners verpasst, sieht sie nicht mehr als Text. Die Spur auf dem eigenen Feld zeigt aber jede besuchte Zelle und jede entdeckte Mauer.
+- Server und Vertrag bleiben unverändert.
+- ADR-031 und ADR-037 bleiben gültig. Nur der Kasten als Anzeige entfällt.
 
 ---
 

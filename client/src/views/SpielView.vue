@@ -112,9 +112,6 @@ const titel = computed(() => {
   return match.value?.status === 'wartet' ? 'Duell' : `Duell gegen ${gegnerName.value}`
 })
 
-/** Live-Kasten im Duell: Anfragen des Gegners, neueste oben */
-const gegnerZuege = computed(() => [...(match.value?.gegnerAnfragen ?? [])].reverse())
-
 /**
  * Die Frist, die gerade zählt: Aufbau oder Nachbesserung, Bereitschaft oder Zug.
  * rotAb nennt die Sekunden, ab denen der Countdown rot wird.
@@ -601,33 +598,6 @@ onUnmounted(() => {
         <p v-else-if="auslosung" data-test="auslosung" class="font-titel text-xl">
           {{ auslosung }}
         </p>
-      </div>
-
-      <!-- Live-Kasten im Duell: Optik wie das Bereitschafts-Overlay, aber ohne Abdunkeln -->
-      <div
-        v-if="istDuell && (match.status === 'laeuft' || match.status === 'beendet')"
-        data-test="live-kasten"
-        class="space-y-2 rounded-lg bg-white p-4 shadow-lg"
-        aria-live="polite"
-      >
-        <div class="flex items-baseline justify-between gap-2">
-          <h2 class="font-titel text-lg">Live: {{ gegnerName }} sucht deinen Schatz</h2>
-          <span class="text-sm text-slate-600">{{ gegnerZuege.length }} Anfragen</span>
-        </div>
-        <ol
-          v-if="gegnerZuege.length"
-          data-test="live-liste"
-          class="max-h-40 space-y-1 overflow-y-auto text-sm"
-        >
-          <li
-            v-for="(a, i) in gegnerZuege"
-            :key="gegnerZuege.length - i"
-            :class="i === 0 ? 'font-semibold' : 'text-slate-600'"
-          >
-            {{ a.ziel }}? → {{ antwortText(a) }}
-          </li>
-        </ol>
-        <p v-else class="text-sm text-slate-600">Noch keine Anfragen.</p>
       </div>
 
       <div v-if="match.status !== 'wartet'" class="grid gap-6 md:grid-cols-2">
