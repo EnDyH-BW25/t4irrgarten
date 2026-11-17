@@ -336,10 +336,18 @@ async function computerAbspielen(start: BekannteKarte, anfragenListe: AnfrageErg
   abspielKarte.value = null
 }
 
+/** Nach dem Spiel zurück: im Turnier zur Übersicht, sonst zum Dashboard */
+const rueckweg = computed(() => {
+  const turnierId = match.value?.competitionId
+  return turnierId
+    ? { ziel: `/turnier/${turnierId}`, text: 'Zur Turnierübersicht' }
+    : { ziel: '/dashboard', text: 'Zum Dashboard' }
+})
+
 async function aufgebenKlicken() {
   try {
     uebernehmen(await aufgeben(props.id))
-    await router.push('/dashboard')
+    await router.push(rueckweg.value.ziel)
   } catch (e) {
     meldung.value = fehlertext(e)
   }
@@ -378,6 +386,7 @@ onUnmounted(() => {
         <h1 data-test="titel" class="font-titel text-2xl">{{ titel }}</h1>
         <p data-test="status" class="text-slate-600">
           {{ STATUS_TEXT[match.status] }}
+          <template v-if="match.competitionId"> · Turnier</template>
           <template v-if="match.schwierigkeit">
             · {{ SCHWIERIGKEITEN.find((s) => s.wert === match!.schwierigkeit)?.text }}
           </template>
@@ -432,7 +441,9 @@ onUnmounted(() => {
           Niemand ist beigetreten. Das Spiel zählt nicht.
         </p>
         <p v-else class="text-sm">Keiner war rechtzeitig bereit. Das Spiel zählt nicht.</p>
-        <RouterLink to="/dashboard" class="mt-2 inline-block underline">Zum Dashboard</RouterLink>
+        <RouterLink :to="rueckweg.ziel" data-test="rueckweg" class="mt-2 inline-block underline">
+          {{ rueckweg.text }}
+        </RouterLink>
       </div>
 
       <!-- Spielende -->
@@ -454,7 +465,9 @@ onUnmounted(() => {
             {{ i > 0 ? ' · ' : '' }}{{ s.id === meineId ? 'Du' : s.name }} {{ s.anfragen }}
           </template>
         </p>
-        <RouterLink to="/dashboard" class="mt-2 inline-block underline">Zum Dashboard</RouterLink>
+        <RouterLink :to="rueckweg.ziel" data-test="rueckweg" class="mt-2 inline-block underline">
+          {{ rueckweg.text }}
+        </RouterLink>
       </div>
 
       <!-- Warteraum (ADR-009): Code weitergeben, bis der Gegner beitritt -->

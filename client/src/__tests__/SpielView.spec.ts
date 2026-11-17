@@ -12,6 +12,7 @@ async function aufbauen(id = 'match-1') {
     routes: [
       { path: '/spiel/:id', component: SpielView, props: true },
       { path: '/dashboard', component: { template: '<p>Dashboard</p>' } },
+      { path: '/turnier/:id', component: { template: '<p>Turnier</p>' } },
     ],
   })
   router.push(`/spiel/${id}`)
@@ -54,6 +55,39 @@ describe('SpielView', () => {
     await wrapper.find('[data-test=aufgeben]').trigger('click')
     await flushPromises()
     expect(router.currentRoute.value.path).toBe('/dashboard')
+  })
+
+  it('Turnier-Match: Aufgeben führt zur Turnierübersicht', async () => {
+    const turnierMatch = { competitionId: 't1' }
+    serverAttrappe({
+      '/api/matches/match-1': () => Response.json(beispielMatch(turnierMatch)),
+      '/api/matches/match-1/resign': () =>
+        Response.json(beispielMatch({ ...turnierMatch, status: 'beendet' })),
+    })
+    const { wrapper, router } = await aufbauen()
+    expect(wrapper.find('[data-test=status]').text()).toContain('Turnier')
+    await wrapper.find('[data-test=aufgeben]').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/turnier/t1')
+  })
+
+  it('Turnier-Match: die Endansicht verlinkt die Übersicht statt das Dashboard', async () => {
+    serverAttrappe({
+      '/api/matches/match-1': () =>
+        Response.json(
+          beispielMatch({
+            competitionId: 't1',
+            status: 'beendet',
+            siegerId: 'id-1',
+            endegrund: 'walkover',
+          }),
+        ),
+    })
+    const { wrapper } = await aufbauen()
+    const link = wrapper.find('[data-test=rueckweg]')
+    expect(link.text()).toBe('Zur Turnierübersicht')
+    expect(link.attributes('href')).toBe('/turnier/t1')
+    expect(wrapper.find('[data-test=ergebnis]').text()).toContain('Kampflos')
   })
 
   it('bietet kein Aufgeben mehr an, wenn das Spiel vorbei ist', async () => {
