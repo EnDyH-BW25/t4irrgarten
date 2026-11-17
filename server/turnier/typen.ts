@@ -1,3 +1,10 @@
+/**
+ * INTERNE TURNIER-TYPEN (ADR-034: Turnier als Hülle um normale Matches)
+ * Ein Turnier mit 4 Spielern: Runde 1 = 2 Matches, Runde 2 = Finale (Platz 1/2) und
+ * Spiel um Platz 3 (Platz 3/4). Jeder spielt also genau zwei Matches.
+ * Das Turnier speichert nur Verweise (matchId). Status, Sieger und Spielstand stehen im Match.
+ * So gibt es keine doppelten Daten, die auseinanderlaufen könnten.
+ */
 import type { Schwierigkeit, TurnierStatus } from '../../shared/types.ts'
 
 /** Teilnehmer eines Turniers; der Computer-Spieler kommt erst beim Start dazu */

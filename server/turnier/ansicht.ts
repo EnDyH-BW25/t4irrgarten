@@ -5,6 +5,9 @@ import { turnierTeilnehmer } from './ablauf.ts'
 import type { TeilnehmerIntern, TurnierIntern } from './typen.ts'
 
 /**
+ * TURNIER-ANSICHT: Gegenstück zu match/ansicht.ts (TurnierIntern => Turnier für den Client)
+ * Liefert zusätzlich meinNaechstesMatchId: Daran erkennt TurnierView, dass sie ins Spiel springen soll.
+ *
  * Sicht eines Teilnehmers auf das Turnier. Status und Sieger jeder Paarung kommen aus ihrem Match,
  * das Turnier speichert sie nicht doppelt. Nur der Host sieht den Code.
  */

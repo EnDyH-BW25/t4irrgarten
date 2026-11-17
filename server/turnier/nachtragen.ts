@@ -1,3 +1,14 @@
+/**
+ * NACHTRAGEN: der zentrale "Aufholen"-Schritt vor jeder Antwort (ADR-028 für alles)
+ * Reihenfolge bei jedem Turnier-Abruf:
+ *   1. Code-Frist des Turniers
+ *   2. Fristen aller Matches der aktuellen Runde (fristenPruefen)
+ *   3. Ergebnisse beendeter Matches sichern
+ *   4. Turnier fortschreiben (Runde 2 / Platzierung), neue Matches speichern
+ *   5. Endplatz in die Ergebnisse eintragen
+ * Auch die Match-Routen nutzen ergebnisseSichern und offenesMatch/offenesTurnier von hier.
+ * Spielstand bündelt alle Speicher, damit nicht jede Funktion fünf Parameter braucht.
+ */
 import type { ErgebnisSpeicher } from '../ergebnis/speicher.ts'
 import { ergebnisseAus } from '../match/ergebnis.ts'
 import { fristenPruefen } from '../match/fristpruefung.ts'
@@ -18,7 +29,11 @@ export type Spielstand = {
   zufall: Zufall
 }
 
-/** Trägt die Ergebnisse eines beendeten Matches ein. Ein zweiter Aufruf ändert nichts. */
+/**
+ * Trägt die Ergebnisse eines beendeten Matches ein. Ein zweiter Aufruf ändert nichts.
+ * Idempotent: beliebig oft aufrufbar, das Ergebnis bleibt gleich. Darum darf jede Route
+ * es einfach nach jeder Änderung aufrufen, ohne zu prüfen, ob schon gespeichert wurde.
+ */
 export async function ergebnisseSichern(s: Spielstand, match: MatchIntern): Promise<void> {
   if (match.status === 'beendet') await s.ergebnisse.eintragen(ergebnisseAus(match))
 }
@@ -54,6 +69,7 @@ export async function offenesMatch(s: Spielstand, nutzerId: string): Promise<Mat
   if (!match) return null
   fristenPruefen(match, s.uhr(), s.zufall)
   await ergebnisseSichern(s, match)
+  // Erneut suchen: Ist das Match durch eine Frist gerade beendet worden, ist es nicht mehr offen
   return s.matches.offenesMatchVon(nutzerId)
 }
 

@@ -5,7 +5,14 @@ import type { Sessions } from '../auth/sessions.ts'
 import { ApiFehler } from '../fehler.ts'
 import type { ErgebnisSpeicher } from './speicher.ts'
 
-/** Grenzen für GET /results laut openapi.yaml */
+/**
+ * ERGEBNIS-ROUTEN unter /api/results (nur lesen, nur eigene Ergebnisse)
+ *   GET /?limit=10&offset=0  eine Seite der eigenen Ergebnisse, neueste zuerst (ADR-033)
+ *   GET /stats               Siege, Niederlagen, Quote; der Server rechnet
+ * Der Nutzer kommt immer aus der Session, nie aus der URL: Fremde Ergebnisse sind nicht abrufbar.
+ */
+
+/** Grenzen für GET /results laut openapi.yaml (max. 100 schützt vor riesigen Antworten) */
 const LIMIT = { standard: 10, max: 100 }
 
 /**

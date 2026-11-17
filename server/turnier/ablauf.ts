@@ -1,3 +1,12 @@
+/**
+ * TURNIER-ABLAUF: Warteraum und Start (Gegenstück zu match/ablauf.ts)
+ * Status: wartet ──Host startet ab 3──> laeuft ──Runde 2 fertig──> beendet
+ *            └── Host geht / Code 30 min abgelaufen ──> abgebrochen
+ * Wiederverwendung: Die Matches eines Turniers entstehen mit denselben Funktionen wie
+ * normale Matches (computerMatchErstellen, duellErstellen + beitreten). Sie bekommen nur
+ * competitionId und runde dazu. SpielView im Client merkt kaum einen Unterschied.
+ * Runde 2 und Platzierung entstehen in fortschreiben.ts.
+ */
 import { TURNIER_GROESSE, TURNIER_MIN_START } from '../../shared/types.ts'
 import type { Nutzer, Schwierigkeit } from '../../shared/types.ts'
 import { ApiFehler } from '../fehler.ts'
@@ -59,6 +68,7 @@ export function turnierVerlassen(turnier: TurnierIntern, nutzerId: string): void
   if (turnier.status !== 'wartet') {
     throw new ApiFehler(409, 'KONFLIKT', 'Das Turnier hat schon begonnen. Gib im Match auf.')
   }
+  // Host geht => niemand kann mehr starten, also endet das Turnier für alle
   if (nutzerId === turnier.hostId) turnierAbbrechen(turnier)
   else turnier.teilnehmer = turnier.teilnehmer.filter((t) => t.id !== nutzerId)
 }
@@ -110,6 +120,7 @@ export function turnierStarten(
   turnier.codeEndeAm = null
 
   // Auslosung: zufällige Reihenfolge, dann Plätze 1+2 und 3+4 als Paarungen.
+  // Beispiel: gemischt [Lea, Computer, Ben, Mia] => Lea gegen Computer, Ben gegen Mia
   // Mit nur einem Computer spielt er immer gegen einen Menschen.
   const gelost = mischen(turnier.teilnehmer, zufall)
   const matches = [

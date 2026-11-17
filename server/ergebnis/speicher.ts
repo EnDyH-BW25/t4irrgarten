@@ -1,3 +1,10 @@
+/**
+ * ERGEBNISSPEICHER: beendete Spiele dauerhaft in data/ergebnisse.json (ADR-029)
+ * Einziger dauerhafter Speicher neben den Nutzern. Matches verschwinden beim Neustart,
+ * ihre Ergebnisse bleiben. Grundlage für Dashboard-Statistik und ErgebnisseView.
+ * Ein Eintrag pro Mensch und Match (aus Sicht dieses Menschen: Sieg/Niederlage, Gegnername).
+ * Gleiches Muster wie NutzerSpeicher: Liste im Speicher + JsonDatei, Fabrikmethode laden().
+ */
 import type { Ergebnis, Statistik } from '../../shared/types.ts'
 import { JsonDatei } from '../jsonDatei.ts'
 
@@ -27,6 +34,7 @@ export class ErgebnisSpeicher {
    * für dasselbe Match ändert nichts und schreibt nicht.
    */
   async eintragen(neue: GespeichertesErgebnis[]): Promise<void> {
+    // Schutz vor Dubletten: matchId + nutzerId ist der eindeutige Schlüssel
     const fehlend = neue.filter((n) =>
       !this.eintraege.some((e) => e.matchId === n.matchId && e.nutzerId === n.nutzerId)
     )
@@ -59,6 +67,7 @@ export class ErgebnisSpeicher {
   vonNutzer(nutzerId: string): Ergebnis[] {
     return this.eintraege
       .filter((e) => e.nutzerId === nutzerId)
+      // ISO-Zeitstempel lassen sich als Text sortieren; b vor a = absteigend (neueste zuerst)
       .sort((a, b) => b.beendetAm.localeCompare(a.beendetAm))
       .map(alsErgebnis)
   }

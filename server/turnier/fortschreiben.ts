@@ -1,3 +1,12 @@
+/**
+ * TURNIER FORTSCHREIBEN: aus Runde 1 wird Runde 2, aus Runde 2 die Platzierung (ADR-035)
+ * Wie bei den Match-Fristen gibt es keinen Timer und kein Ereignis "Match beendet".
+ * Bei jedem Abruf schaut diese Funktion nach, ob alle Matches der Runde fertig sind.
+ * Sonderfälle:
+ *   Walkover (kampflos): Wer in Runde 1 per Aufgabe/Frist verlor, gilt als weg. Sein Gegner
+ *   in Runde 2 gewinnt sofort, das Match endet direkt mit Grund walkover.
+ *   Beide Spieler einer Runde-2-Paarung weg oder ein Match abgebrochen => Turnier abgebrochen.
+ */
 import type { Endegrund } from '../../shared/types.ts'
 import { beenden } from '../match/ablauf.ts'
 import type { MatchSpeicher } from '../match/speicher.ts'
@@ -27,6 +36,7 @@ export function turnierFortschreiben(
 ): MatchIntern[] {
   if (turnier.status !== 'laeuft') return []
 
+  // Nur die aktuelle (letzte) Runde zählt
   const runde = turnier.runden[turnier.runden.length - 1]
   const rundenMatches = runde.map((p) => matches.holen(p.matchId)!)
 
@@ -34,7 +44,7 @@ export function turnierFortschreiben(
     turnierAbbrechen(turnier)
     return []
   }
-  if (!rundenMatches.every((m) => m.status === 'beendet')) return []
+  if (!rundenMatches.every((m) => m.status === 'beendet')) return [] // noch nicht alle fertig: warten
 
   if (turnier.runden.length === 1) return runde2Anlegen(turnier, rundenMatches, jetzt, zufall)
 
@@ -59,6 +69,7 @@ function runde2Anlegen(
     .filter((m) => AUSSCHEIDEN.includes(m.endegrund!))
     .map(verliererId)
 
+  // Tupel: [Spieler A, Spieler B, Plätze, um die es geht]
   const paare: [TeilnehmerIntern, TeilnehmerIntern, number[]][] = [
     [sieger[0], sieger[1], [1, 2]],
     [verlierer[0], verlierer[1], [3, 4]],

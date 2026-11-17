@@ -1,3 +1,6 @@
+/**
+ * TURNIERSPEICHER: Gegenstück zum MatchSpeicher (Map im Arbeitsspeicher, gleiche Methoden)
+ */
 import type { TurnierIntern } from './typen.ts'
 
 /** Hält alle Turniere im Arbeitsspeicher, wie der MatchSpeicher (ADR-026) */

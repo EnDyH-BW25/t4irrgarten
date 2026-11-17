@@ -1,3 +1,13 @@
+/**
+ * TURNIER-ROUTEN unter /api/competitions (alle nur angemeldet), gleiches Muster wie match/routen.ts
+ *   POST   /                    Turnier anlegen (Host), 409 wenn schon etwas offen
+ *   POST   /join                per Code beitreten
+ *   GET    /current             offenes Turnier für das Dashboard (404 = keins)
+ *   GET    /:id                 Stand abrufen; schreibt dabei das Turnier fort (Polling)
+ *   POST   /:id/start           Host startet ab 3 Spielern
+ *   DELETE /:id/participants/me Warteraum verlassen (Host: Turnier auflösen), 204
+ * Kein since/304 wie bei Matches: Ein Turnier ist klein, und jeder Abruf soll nachtragen.
+ */
 import { Hono } from '@hono/hono'
 import type { Context } from '@hono/hono'
 import { TURNIER_GROESSE } from '../../shared/types.ts'
@@ -91,6 +101,7 @@ export function turnierRouten(sessions: Sessions, nutzerSpeicher: NutzerSpeicher
   routen.post('/:id/start', async (c) => {
     const turnier = await turnierHolen(c)
     const neue = turnierStarten(turnier, c.get('nutzer').id, uhr(), zufall)
+    // ablauf.ts kennt keinen Speicher; die Route legt die zwei Matches von Runde 1 ab
     for (const match of neue) matches.anlegen(match)
     return ansicht(c, turnier)
   })
