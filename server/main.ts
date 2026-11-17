@@ -3,6 +3,7 @@ import { logger } from '@hono/hono/logger'
 import { NutzerSpeicher } from './auth/nutzerSpeicher.ts'
 import { authRouten } from './auth/routen.ts'
 import { Sessions } from './auth/sessions.ts'
+import { ergebnisRouten } from './ergebnis/routen.ts'
 import { ErgebnisSpeicher } from './ergebnis/speicher.ts'
 import { fehlerBehandeln, nichtGefunden } from './fehler.ts'
 import { matchRouten, type Umgebung } from './match/routen.ts'
@@ -42,6 +43,7 @@ export function appErstellen(
   app.get('/health', (c) => c.json({ status: 'ok', serverZeit: new Date().toISOString() }))
   app.route('/auth', authRouten(sessions, speicher))
   app.route('/matches', matchRouten(sessions, speicher, matches, ergebnisse, { uhr, zufall }))
+  app.route('/results', ergebnisRouten(sessions, speicher, ergebnisse))
 
   return app
 }
