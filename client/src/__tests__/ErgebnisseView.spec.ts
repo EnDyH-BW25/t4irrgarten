@@ -73,6 +73,18 @@ describe('ErgebnisseView', () => {
     expect(wrapper.find('[data-test=mehr]').exists()).toBe(false)
   })
 
+  it('ein zwischendurch beendetes Spiel erzeugt keinen doppelten Eintrag', async () => {
+    serverAttrappe({
+      '/api/results?limit=20&offset=0': () => Response.json(ergebnisse(0, 20)),
+      // Ein neues Spiel kam vorne dazu: Die zweite Seite beginnt mit dem letzten Eintrag der ersten
+      '/api/results?limit=20&offset=20': () => Response.json(ergebnisse(19, 2)),
+    })
+    const { wrapper } = await aufbauen()
+    await wrapper.find('[data-test=mehr]').trigger('click')
+    await flushPromises()
+    expect(wrapper.findAll('[data-test=ergebnis]')).toHaveLength(21)
+  })
+
   it('ohne Spiele steht ein Hinweis und kein Mehr-laden-Button', async () => {
     serverAttrappe({ '/api/results?limit=20&offset=0': () => Response.json([]) })
     const { wrapper } = await aufbauen()

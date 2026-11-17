@@ -22,7 +22,10 @@ async function naechsteSeite() {
   meldung.value = null
   try {
     const seite = await ergebnisseLaden(SEITE, liste.value.length)
-    liste.value.push(...seite)
+    // Endete inzwischen ein Spiel, rutscht alles um einen Platz nach hinten (ADR-033).
+    // Schon geladene Einträge kämen dann doppelt und fallen hier heraus.
+    const neue = seite.filter((n) => !liste.value.some((e) => e.id === n.id))
+    liste.value.push(...neue)
     mehrDa.value = seite.length === SEITE
   } catch (e) {
     meldung.value = e instanceof ApiFehler ? e.message : 'Unbekannter Fehler.'
