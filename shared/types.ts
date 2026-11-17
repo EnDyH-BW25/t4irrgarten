@@ -1,13 +1,32 @@
+/**
+ * GEMEINSAMER VERTRAG ZWISCHEN CLIENT UND SERVER (ADR, Entscheidung aus Phase 0)
+ * Eine Datei, zwei Nutzer:
+ *   Server importiert '../shared/types.ts', Client '@shared/types.ts' (Vite-Alias)
+ * Ändert sich ein Feld hier, meldet TypeScript Fehler auf BEIDEN Seiten. So passen
+ * Request und Antwort immer zusammen. Die Typen spiegeln die openapi.yaml.
+ * Regeln: nur "type" (kein interface), nur Typen und Konstanten, keine Logik.
+ * Zeiten sind ISO-Texte (string), weil JSON kein Date kennt.
+ * Konstanten hier (MAX_MAUERN, Längen, Anzeigezeiten), damit Client und Server mit
+ * denselben Werten rechnen.
+ */
+
 // Zeilen von oben nach unten:
 export type Zeile = 'A' | 'B' | 'C' | 'D' | 'E' | 'F'
 
 // Spalten von links nach rechts:
 export type Spalte = 1 | 2 | 3 | 4 | 5 | 6
 
-/** Eine Zelle im 6x6-Raster */
+/**
+ * Eine Zelle im 6x6-Raster
+ * Template Literal Type: TypeScript kennt damit alle 36 erlaubten Texte ('A1' ... 'F6').
+ * 'G7' oder 'A0' ergibt schon beim Kompilieren einen Fehler.
+ */
 export type Zelle = `${Zeile}${Spalte}`
 
-/** Eine Mauer zwischen zwei Zellen */
+/**
+ * Eine Mauer zwischen zwei Zellen
+ * Der Typ erlaubt auch 'A1_F6'. Ob die Zellen Nachbarn sind, prüft erst parseMauer zur Laufzeit.
+ */
 export type Mauer = `${Zelle}_${Zelle}`
 
 /** Gesetztes Labyrinth mit festgelegtem Schatz und Mauern */
@@ -16,12 +35,17 @@ export type Labyrinth = {
   mauern: Mauer[]
 }
 
-/** Entwurf eines Labyrinths in der Aufbau-Phase; der Schatz darf noch fehlen */
+/**
+ * Entwurf eines Labyrinths in der Aufbau-Phase; der Schatz darf noch fehlen
+ * Zwei Typen statt einem: Nach dem Setzen garantiert Labyrinth, dass ein Schatz liegt.
+ */
 export type LabyrinthEntwurf = {
   schatz: Zelle | null
   mauern: Mauer[]
 }
 
+// Union Type: Nur diese sechs Texte sind erlaubt. Ablauf siehe server/match/ablauf.ts
+// beendet = mit Sieger und Ergebnis, abgebrochen = ohne Wertung
 export type MatchStatus = 'wartet' | 'aufbau' | 'startbereit' | 'laeuft' | 'beendet' | 'abgebrochen'
 
 /** Maschinenlesbare Fehlercodes aus der openapi.yaml */
@@ -113,7 +137,12 @@ export type Endegrund =
   | 'startfrist'
   | 'walkover'
 
-/** Stand eines Matches aus Sicht des anfragenden Spielers; der Server schickt immer alle Felder */
+/**
+ * Stand eines Matches aus Sicht des anfragenden Spielers; der Server schickt immer alle Felder
+ * Wichtigster Typ des Vertrags. Erzeugt von server/match/ansicht.ts, angezeigt von SpielView.
+ * Immer alle Felder (null statt fehlend): Der Client muss nie prüfen, ob ein Feld existiert.
+ * "ich" und "gegner" sind relativ: Zwei Spieler bekommen zwei verschiedene Sichten.
+ */
 export type Match = {
   id: string
   version: number // steigt bei jeder Änderung, Grundlage für since und 304
@@ -145,7 +174,10 @@ export type Match = {
   gegnerLabyrinth: Labyrinth | null // erst nach Spielende gesetzt
 }
 
-/** Anfrage zum Anlegen eines Matches; die Schwierigkeit gibt es nur im Modus computer */
+/**
+ * Anfrage zum Anlegen eines Matches; die Schwierigkeit gibt es nur im Modus computer
+ * Discriminated Union: modus entscheidet, ob schwierigkeit da sein muss.
+ */
 export type MatchAnlegen = { modus: 'computer'; schwierigkeit: Schwierigkeit } | { modus: 'duell' }
 
 /** Status eines Turniers; ein Turnier kennt keinen Aufbau, den haben seine Matches */
@@ -207,7 +239,10 @@ export type AnfrageEingabe = {
   ziel: Zelle
 }
 
-/** Antwort auf eine Anfrage (QueryResponse in der openapi.yaml) */
+/**
+ * Antwort auf eine Anfrage (QueryResponse in der openapi.yaml)
+ * & = Intersection: alle Felder von AnfrageErgebnis plus die zwei neuen Felder
+ */
 export type AnfrageAntwort = AnfrageErgebnis & {
   computerAnfragen: AnfrageErgebnis[] | null // Zug des Computers, nur im Modus computer
   match: Match
