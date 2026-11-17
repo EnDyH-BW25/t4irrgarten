@@ -60,3 +60,5 @@ export const post = <T>(pfad: string, daten?: unknown) =>
 
 export const put = <T>(pfad: string, daten: unknown) =>
   api<T>(pfad, { method: 'PUT', body: JSON.stringify(daten) })
+
+export const del = <T>(pfad: string) => api<T>(pfad, { method: 'DELETE' })

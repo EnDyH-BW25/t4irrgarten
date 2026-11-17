@@ -1,12 +1,20 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import type { Ergebnis, Match, Schwierigkeit, Statistik } from '@shared/types.ts'
+import type { Ergebnis, Match, Schwierigkeit, Statistik, Turnier } from '@shared/types.ts'
 import { ApiFehler } from '@/api'
 import { nutzer } from '@/anmeldung'
-import { SCHWIERIGKEITEN, STATUS_TEXT, datumText, gegnerText, quoteText } from '@/anzeige'
+import {
+  SCHWIERIGKEITEN,
+  STATUS_TEXT,
+  datumText,
+  gegnerText,
+  quoteText,
+  turnierStandText,
+} from '@/anzeige'
 import { ergebnisseLaden, statistikLaden } from '@/ergebnisse'
 import { aufgeben, beitreten, duellAnlegen, matchAnlegen, offenesMatch } from '@/matches'
+import { offenesTurnier, turnierAnlegen, turnierBeitreten } from '@/turniere'
 
 const router = useRouter()
 
@@ -15,6 +23,8 @@ const schwierigkeit = ref<Schwierigkeit>(nutzer.value?.schwierigkeit ?? 'standar
 
 /** Offenes Match des Nutzers; null heißt: Er kann ein neues starten */
 const laufend = ref<Match | null>(null)
+/** Wartendes oder laufendes Turnier; sperrt neue Spiele auch zwischen zwei Runden */
+const turnier = ref<Turnier | null>(null)
 const laedt = ref(true)
 /** Welche Auswahl unter "Neues Spiel" offen ist */
 const auswahlOffen = ref(false)
@@ -22,6 +32,10 @@ const liveOffen = ref(false)
 const beitretenOffen = ref(false)
 /** Eingabe im Feld "Spielcode" */
 const code = ref('')
+/** Auswahl und Code unter "Neues Turnier"; getrennt vom Duell, damit die Felder nicht verwechseln */
+const turnierOffen = ref(false)
+const turnierBeitretenOffen = ref(false)
+const turnierCode = ref('')
 const sendet = ref(false)
 const meldung = ref<string | null>(null)
 
@@ -40,6 +54,8 @@ async function laden() {
     // Erst das offene Match: Der Abruf trägt abgelaufene Fristen nach (ADR-028).
     // Endete dabei ein Match, steht sein Ergebnis danach schon in der Statistik.
     laufend.value = await offenesMatch()
+    // Danach das Turnier: Der Abruf legt fällige Runden an und trägt die Platzierung ein
+    turnier.value = await offenesTurnier()
     const [s, l] = await Promise.all([statistikLaden(), ergebnisseLaden()])
     statistik.value = s
     letzte.value = l
@@ -51,15 +67,15 @@ async function laden() {
 }
 
 /**
- * Gemeinsamer Ablauf für alle Wege ins Spiel: Server fragen, danach zur Spielansicht.
- * Im Duell zeigt die Spielansicht zuerst den Warteraum.
+ * Gemeinsamer Ablauf für alle Wege ins Spiel: Server fragen, danach zur Seite, deren Pfad
+ * `anlegen` liefert. Im Duell zeigt die Spielansicht zuerst den Warteraum, im Turnier die
+ * Turnierseite.
  */
-async function starten(anlegen: () => Promise<Match>) {
+async function starten(anlegen: () => Promise<string>) {
   sendet.value = true
   meldung.value = null
   try {
-    const match = await anlegen()
-    await router.push(`/spiel/${match.id}`)
+    await router.push(await anlegen())
   } catch (e) {
     // 409: Es gibt doch ein offenes Match, zum Beispiel aus einem anderen Tab
     if (e instanceof ApiFehler && e.status === 409) await laden()
@@ -75,26 +91,37 @@ function gegenComputerStarten() {
     const match = await matchAnlegen(schwierigkeit.value)
     // Der Server hat sich die Wahl gemerkt; lokal nachziehen spart einen Abruf von /auth/me
     if (nutzer.value) nutzer.value.schwierigkeit = schwierigkeit.value
-    return match
+    return `/spiel/${match.id}`
   })
 }
 
 function duellErstellen() {
-  return starten(duellAnlegen)
+  return starten(async () => `/spiel/${(await duellAnlegen()).id}`)
 }
 
 function duellBeitreten() {
-  return starten(() => beitreten(code.value))
+  return starten(async () => `/spiel/${(await beitreten(code.value)).id}`)
+}
+
+/** Der Host gibt die Schwierigkeit mit; sie gilt nur für einen auffüllenden Computer (ADR-010) */
+function turnierErstellen() {
+  return starten(async () => `/turnier/${(await turnierAnlegen(schwierigkeit.value)).id}`)
+}
+
+function turnierCodeSenden() {
+  return starten(async () => `/turnier/${(await turnierBeitreten(turnierCode.value)).id}`)
 }
 
 /** Erst bei fünf Zeichen lohnt der Versuch; den Rest prüft der Server */
 const codeVollstaendig = computed(() => code.value.trim().length === 5)
+const turnierCodeVollstaendig = computed(() => turnierCode.value.trim().length === 5)
 
 /** Gegner des offenen Matches in Worten */
 const laufendGegner = computed(() => {
   const m = laufend.value
   if (!m) return ''
   if (m.status === 'wartet') return 'Duell im Warteraum'
+  if (m.competitionId) return 'Turnier-Match'
   if (m.modus === 'computer') return 'Gegen den Computer'
   const gegner = m.spieler.find((s) => s.id !== nutzer.value?.id)
   return `Gegen ${gegner?.name ?? 'einen Gegner'}`
@@ -161,6 +188,20 @@ onMounted(laden)
           {{ laufend.status === 'wartet' ? 'Abbrechen' : 'Aufgeben' }}
         </button>
       </div>
+    </div>
+
+    <!-- Offenes Turnier ohne laufendes Match: Warteraum oder Wartebildschirm zwischen Runden -->
+    <div v-else-if="turnier" data-test="laufendes-turnier" class="rounded-lg bg-white p-4 shadow">
+      <h2 class="font-titel text-lg">Laufendes Turnier</h2>
+      <p class="mt-1 text-sm text-slate-600">{{ turnierStandText(turnier) }}</p>
+      <button
+        type="button"
+        data-test="zum-turnier"
+        class="mt-3 w-full rounded bg-blue-700 px-3 py-2 text-white"
+        @click="router.push(`/turnier/${turnier.id}`)"
+      >
+        Zum Turnier
+      </button>
     </div>
 
     <!-- Kein offenes Match: neues Spiel starten -->
@@ -235,6 +276,62 @@ onMounted(laden)
           data-test="code-senden"
           class="rounded bg-blue-700 px-3 py-2 text-white disabled:opacity-50"
           :disabled="sendet || !codeVollstaendig"
+        >
+          Beitreten
+        </button>
+      </form>
+
+      <!-- Turnier: erstellen (Host) oder mit Code beitreten (ADR-010) -->
+      <button
+        type="button"
+        data-test="neues-turnier"
+        class="w-full rounded bg-blue-700 px-3 py-2 text-white"
+        @click="turnierOffen = !turnierOffen"
+      >
+        Neues Turnier
+      </button>
+      <div v-if="turnierOffen" class="grid grid-cols-2 gap-2">
+        <button
+          type="button"
+          data-test="turnier-erstellen"
+          class="rounded bg-orange-300 px-3 py-2 disabled:opacity-50"
+          :disabled="sendet"
+          @click="turnierErstellen"
+        >
+          Turnier erstellen
+        </button>
+        <button
+          type="button"
+          data-test="turnier-beitreten"
+          class="rounded bg-orange-300 px-3 py-2 disabled:opacity-50"
+          :disabled="sendet"
+          @click="turnierBeitretenOffen = !turnierBeitretenOffen"
+        >
+          Turnier beitreten
+        </button>
+      </div>
+      <p v-if="turnierOffen" class="text-xs text-slate-500">
+        Fehlt ein Spieler, füllt ein Computer mit der gewählten Schwierigkeit auf.
+      </p>
+      <form
+        v-if="turnierOffen && turnierBeitretenOffen"
+        class="flex gap-2"
+        @submit.prevent="turnierCodeSenden"
+      >
+        <input
+          v-model="turnierCode"
+          data-test="turnier-code"
+          aria-label="Turnier-Code"
+          placeholder="Turnier-Code, z. B. H3R8W"
+          maxlength="5"
+          autocomplete="off"
+          class="min-w-0 flex-1 rounded border border-slate-300 bg-white px-3 py-2 uppercase"
+        />
+        <button
+          type="submit"
+          data-test="turnier-code-senden"
+          class="rounded bg-blue-700 px-3 py-2 text-white disabled:opacity-50"
+          :disabled="sendet || !turnierCodeVollstaendig"
         >
           Beitreten
         </button>

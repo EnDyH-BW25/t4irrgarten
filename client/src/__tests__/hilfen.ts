@@ -1,4 +1,4 @@
-import type { Match } from '@shared/types.ts'
+import type { Match, Turnier } from '@shared/types.ts'
 import { vi } from 'vitest'
 
 /**
@@ -56,6 +56,25 @@ export function beispielMatch(aenderungen: Partial<Match> = {}): Match {
     siegerId: null,
     endegrund: null,
     gegnerLabyrinth: null,
+    ...aenderungen,
+  }
+}
+
+/** Turnier im Warteraum aus Sicht des Hosts nudl (id-1). Tests überschreiben einzelne Felder. */
+export function beispielTurnier(aenderungen: Partial<Turnier> = {}): Turnier {
+  return {
+    id: 'turnier-1',
+    serverZeit: '2026-11-17T10:00:00.000Z',
+    groesse: 4,
+    schwierigkeit: 'standard',
+    status: 'wartet',
+    hostId: 'id-1',
+    code: 'H3R8W',
+    codeEndeAm: '2026-11-17T10:30:00.000Z',
+    teilnehmer: [{ id: 'id-1', name: 'nudl', istComputer: false, anfragen: 0 }],
+    runden: [],
+    platzierungen: [],
+    meinNaechstesMatchId: null,
     ...aenderungen,
   }
 }

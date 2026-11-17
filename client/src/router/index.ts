@@ -32,6 +32,12 @@ export function routerErstellen(history: RouterHistory) {
         component: () => import('@/views/SpielView.vue'),
         props: true,
       },
+      {
+        path: '/turnier/:id',
+        name: 'turnier',
+        component: () => import('@/views/TurnierView.vue'),
+        props: true,
+      },
       { path: '/:pfad(.*)*', redirect: '/' },
     ],
   })

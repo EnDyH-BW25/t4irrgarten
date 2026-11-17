@@ -4,12 +4,18 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import DashboardView from '../views/DashboardView.vue'
 import { nutzer } from '../anmeldung'
-import { beispielMatch, nichtErreichbar, serverAttrappe } from './hilfen'
+import { beispielMatch, beispielTurnier, nichtErreichbar, serverAttrappe } from './hilfen'
 
 /** Leere Statistik und Liste; Tests, die Ergebnisse prüfen, überschreiben die URLs */
 const OHNE_ERGEBNISSE = {
   '/api/results/stats': () => Response.json({ siege: 0, niederlagen: 0, quote: 0 }),
   '/api/results?limit=10&offset=0': () => Response.json([]),
+  // Standard: kein offenes Turnier; Turnier-Tests überschreiben die URL
+  '/api/competitions/current': () =>
+    Response.json(
+      { fehler: { code: 'NICHT_GEFUNDEN', nachricht: 'Kein Turnier.' } },
+      { status: 404 },
+    ),
 }
 
 /** Server-Attrappe für das Dashboard; ergänzt die Ergebnis-URLs, die jedes Laden abruft */
@@ -32,6 +38,7 @@ async function aufbauen() {
       { path: '/dashboard', component: DashboardView },
       { path: '/spiel/:id', component: { template: '<p>Spiel</p>' } },
       { path: '/ergebnisse', component: { template: '<p>Ergebnisse</p>' } },
+      { path: '/turnier/:id', component: { template: '<p>Turnier</p>' } },
     ],
   })
   router.push('/dashboard')
@@ -306,12 +313,94 @@ describe('DashboardView', () => {
       expect(wrapper.find('[data-test=quote]').text()).toBe('0 %')
     })
 
-    it('fragt die Statistik erst nach dem offenen Match ab', async () => {
+    it('fragt die Statistik erst nach offenem Match und Turnier ab', async () => {
       const attrappe = dashboardServer({ '/api/matches/current': keinMatch })
       await aufbauen()
       const urls = attrappe.mock.calls.map(([url]) => String(url))
-      expect(urls[0]).toBe('/api/matches/current')
-      expect(urls.slice(1).sort()).toEqual(['/api/results/stats', '/api/results?limit=10&offset=0'])
+      // Beide Abrufe tragen Fristen nach; erst danach stimmt die Statistik (ADR-033)
+      expect(urls.slice(0, 2)).toEqual(['/api/matches/current', '/api/competitions/current'])
+      expect(urls.slice(2).sort()).toEqual(['/api/results/stats', '/api/results?limit=10&offset=0'])
+    })
+  })
+
+  describe('Turnier', () => {
+    it('Turnier erstellen schickt Größe und Schwierigkeit und öffnet die Turnierseite', async () => {
+      const attrappe = dashboardServer({
+        '/api/matches/current': keinMatch,
+        '/api/competitions': () => Response.json(beispielTurnier(), { status: 201 }),
+      })
+      const { wrapper, router } = await aufbauen()
+      await wrapper.find('[data-test=neues-turnier]').trigger('click')
+      await wrapper.find('[data-test=turnier-erstellen]').trigger('click')
+      await flushPromises()
+
+      const aufruf = attrappe.mock.calls.find(([url]) => url === '/api/competitions')!
+      expect(JSON.parse(String(aufruf[1]?.body))).toEqual({ groesse: 4, schwierigkeit: 'schwer' })
+      expect(router.currentRoute.value.path).toBe('/turnier/turnier-1')
+    })
+
+    it('Turnier beitreten schickt den Code erst bei fünf Zeichen', async () => {
+      const attrappe = dashboardServer({
+        '/api/matches/current': keinMatch,
+        '/api/competitions/join': () => Response.json(beispielTurnier()),
+      })
+      const { wrapper, router } = await aufbauen()
+      await wrapper.find('[data-test=neues-turnier]').trigger('click')
+      await wrapper.find('[data-test=turnier-beitreten]').trigger('click')
+      const senden = wrapper.find('[data-test=turnier-code-senden]')
+
+      await wrapper.find('[data-test=turnier-code]').setValue('h3r8')
+      expect(senden.attributes('disabled')).toBeDefined()
+      await wrapper.find('[data-test=turnier-code]').setValue('h3r8w')
+      await wrapper.find('form').trigger('submit')
+      await flushPromises()
+
+      const aufruf = attrappe.mock.calls.find(([url]) => url === '/api/competitions/join')!
+      expect(JSON.parse(String(aufruf[1]?.body))).toEqual({ code: 'h3r8w' })
+      expect(router.currentRoute.value.path).toBe('/turnier/turnier-1')
+    })
+
+    it('Duell-Code im Turnierfeld zeigt die Meldung des Servers', async () => {
+      dashboardServer({
+        '/api/matches/current': keinMatch,
+        '/api/competitions/join': () =>
+          Response.json(
+            {
+              fehler: {
+                code: 'CODE_UNGUELTIG',
+                nachricht: 'Der Spielcode ist ungültig oder abgelaufen.',
+              },
+            },
+            { status: 404 },
+          ),
+      })
+      const { wrapper } = await aufbauen()
+      await wrapper.find('[data-test=neues-turnier]').trigger('click')
+      await wrapper.find('[data-test=turnier-beitreten]').trigger('click')
+      await wrapper.find('[data-test=turnier-code]').setValue('K7M2P')
+      await wrapper.find('form').trigger('submit')
+      await flushPromises()
+      expect(wrapper.find('[data-test=meldung]').text()).toContain('ungültig oder abgelaufen')
+    })
+
+    it('offenes Turnier zeigt die Karte statt Neues Spiel', async () => {
+      dashboardServer({
+        '/api/matches/current': keinMatch,
+        '/api/competitions/current': () =>
+          Response.json(
+            beispielTurnier({
+              status: 'laeuft',
+              runden: [{ nr: 1, matches: [] }],
+            }),
+          ),
+      })
+      const { wrapper, router } = await aufbauen()
+      expect(wrapper.find('[data-test=neues-spiel]').exists()).toBe(false)
+      expect(wrapper.find('[data-test=laufendes-turnier]').text()).toContain('Runde 1 läuft')
+
+      await wrapper.find('[data-test=zum-turnier]').trigger('click')
+      await flushPromises()
+      expect(router.currentRoute.value.path).toBe('/turnier/turnier-1')
     })
   })
 })

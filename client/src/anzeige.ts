@@ -4,6 +4,7 @@ import type {
   Ergebnis,
   MatchStatus,
   Schwierigkeit,
+  Turnier,
 } from '@shared/types.ts'
 
 /** Anzeigenamen laut ADR-015; die Reihenfolge ist die des Dropdowns */
@@ -62,4 +63,11 @@ export function gegnerText(e: Ergebnis): string {
   if (e.modus !== 'computer') return e.gegner
   const stufe = SCHWIERIGKEITEN.find((s) => s.wert === e.schwierigkeit)
   return stufe ? `Computer (${stufe.text})` : 'Computer'
+}
+
+/** Kurzer Stand eines Turniers, z. B. "Warteraum · 3 von 4 Spielern" oder "Runde 2 läuft" */
+export function turnierStandText(t: Turnier): string {
+  if (t.status === 'wartet') return `Warteraum · ${t.teilnehmer.length} von ${t.groesse} Spielern`
+  if (t.status === 'laeuft') return `Runde ${t.runden.length} läuft`
+  return t.status === 'beendet' ? 'Beendet' : 'Abgebrochen'
 }
