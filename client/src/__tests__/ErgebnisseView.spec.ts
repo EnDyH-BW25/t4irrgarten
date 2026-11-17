@@ -58,6 +58,17 @@ describe('ErgebnisseView', () => {
     expect(details[1]!.text()).toContain('Aufgegeben')
   })
 
+  it('Turnier-Spiel zeigt Runde und Endplatz, sonst keine Turnierzeile', async () => {
+    const [turnier, normal] = ergebnisse(0, 2)
+    serverAttrappe({
+      '/api/results?limit=20&offset=0': () =>
+        Response.json([{ ...turnier, competitionId: 't1', runde: 2, platzierung: 3 }, normal]),
+    })
+    const { wrapper } = await aufbauen()
+    expect(wrapper.find('[data-test=turnier]').text()).toContain('Runde 2 · Endplatz 3')
+    expect(wrapper.findAll('[data-test=turnier]')).toHaveLength(1)
+  })
+
   it('Mehr laden holt die nächste Seite und verschwindet, wenn nichts mehr kommt', async () => {
     const attrappe = serverAttrappe({
       '/api/results?limit=20&offset=0': () => Response.json(ergebnisse(0, 20)),

@@ -83,10 +83,16 @@ onMounted(naechsteSeite)
             <dd>{{ e.anfragen }}</dd>
             <dt class="text-slate-500">Ende</dt>
             <dd>{{ ENDEGRUND_TEXT[e.endegrund] }}</dd>
-            <!-- Turnier gibt es erst mit Phase 7; die Zeile steht schon bereit -->
+            <!-- Turnier (Phase 7): den Endplatz kennt der Server erst nach Runde 2 -->
             <template v-if="e.competitionId">
               <dt class="text-slate-500">Turnier</dt>
-              <dd>Runde {{ e.runde }}</dd>
+              <dd data-test="turnier">
+                {{
+                  e.platzierung
+                    ? `Runde ${e.runde} · Endplatz ${e.platzierung}`
+                    : `Runde ${e.runde}`
+                }}
+              </dd>
             </template>
           </dl>
         </details>
