@@ -14,8 +14,35 @@
   font-display: swap;
 }
 
-/* Erzeugt die Klassen font-titel und font-text */
+/* Erzeugt die Klassen font-titel, font-text, animate-einblenden und animate-hineinzoomen */
 @theme {
   --font-titel: 'Bowlby One', sans-serif;
   --font-text: 'Rubik', sans-serif;
+
+  --animate-einblenden: einblenden 250ms ease-out;
+  --animate-hineinzoomen: hineinzoomen 400ms cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  @keyframes einblenden {
+    from {
+      opacity: 0;
+    }
+  }
+
+  @keyframes hineinzoomen {
+    from {
+      opacity: 0;
+      transform: scale(0.8);
+    }
+  }
+}
+
+/* Wer im Betriebssystem "Bewegung reduzieren" wählt, sieht alles ohne Animation */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
 }

@@ -9,7 +9,7 @@ import { SPALTEN, zelle, ZEILEN } from '@/brett'
  */
 const props = withDefaults(
   defineProps<{
-    art: 'eigen' | 'gegner' // eigen: blau mit orangen Mauern, gegner: orange mit blauen Mauern
+    art: 'eigen' | 'gegner' // eigen: alles blau, gegner: alles orange (design.md)
     mauern: Mauer[]
     markierteMauern?: Mauer[] // problematische Mauern aus der Prüfung (Schritt 8)
     schatz?: Zelle | null
@@ -76,7 +76,8 @@ const zelleKlickbar = (z: Zelle) => props.bearbeitbar || ziele.value.has(z)
 
 // Farben aus design.md; volle Klassennamen, damit Tailwind sie findet
 const feldFarbe = computed(() => (props.art === 'eigen' ? 'bg-blue-300' : 'bg-orange-300'))
-const mauerFarbe = computed(() => (props.art === 'eigen' ? 'bg-orange-400' : 'bg-blue-600'))
+// Mauern und Plättchen teilen sich eine Farbe, so wirkt jedes Feld aus einem Guss
+const mauerFarbe = computed(() => (props.art === 'eigen' ? 'bg-blue-600' : 'bg-orange-600'))
 
 function mauerKlasse(m: Mauer): string {
   if (!gesetzt.value.has(m)) return props.bearbeitbar ? 'hover:bg-slate-400/60' : ''
@@ -85,6 +86,24 @@ function mauerKlasse(m: Mauer): string {
 }
 
 const lage = (p: Platz) => ({ gridRow: p.zeile, gridColumn: p.spalte })
+
+/**
+ * Die Figur liegt in einer eigenen Ebene über dem Raster und gleitet per CSS-Übergang
+ * von Feld zu Feld. Ein Grid-Platz lässt sich nicht animieren, left und top schon.
+ * In der Ebene ist ein Feld (100% - 3rem) / 6 breit, dazu kommen 0.6rem Mauerplatz.
+ */
+const FELD = '((100% - 3rem) / 6)'
+const figurLage = computed(() => {
+  if (!props.figur) return null
+  const i = ZEILEN.indexOf(props.figur[0] as (typeof ZEILEN)[number])
+  const j = SPALTEN.indexOf(Number(props.figur.slice(1)) as (typeof SPALTEN)[number])
+  return {
+    width: `calc${FELD}`,
+    height: `calc${FELD}`,
+    left: `calc(${j} * (${FELD} + 0.6rem))`,
+    top: `calc(${i} * (${FELD} + 0.6rem))`,
+  }
+})
 </script>
 
 <template>
@@ -127,21 +146,29 @@ const lage = (p: Platz) => ({ gridRow: p.zeile, gridColumn: p.spalte })
       :style="lage(z)"
       @click="emit('zelle', z.name)"
     >
-      <span
-        v-if="besucht.has(z.name)"
-        data-test="besucht"
-        class="absolute inset-2 rounded-sm bg-orange-600/70"
-      />
-      <span
-        v-if="schatz === z.name"
-        data-test="schatz"
-        class="relative h-1/2 w-1/2 rotate-45 rounded-sm bg-cyan-300 ring-2 ring-cyan-600"
-      />
-      <span
-        v-if="figur === z.name"
-        data-test="figur"
-        class="relative h-1/2 w-1/2 rounded-full bg-slate-900"
-      />
+      <!-- Plättchen: Größe relativ zum Feld, damit es in beiden Irrgärten gleich wirkt -->
+      <Transition name="plaettchen">
+        <span
+          v-if="besucht.has(z.name)"
+          data-test="besucht"
+          class="absolute inset-[18%] rounded-sm"
+          :class="mauerFarbe"
+        />
+      </Transition>
+      <Transition name="schatz">
+        <span v-if="schatz === z.name" class="relative flex h-1/2 w-1/2">
+          <!-- Steht die Figur auf dem Schatz, pulsiert ein Ring um ihn -->
+          <span
+            v-if="figur === z.name"
+            data-test="schatz-gefunden"
+            class="absolute inset-0 rotate-45 rounded-sm bg-cyan-300 motion-safe:animate-ping"
+          />
+          <span
+            data-test="schatz"
+            class="relative h-full w-full rotate-45 rounded-sm bg-cyan-300 ring-2 ring-cyan-600"
+          />
+        </span>
+      </Transition>
     </button>
 
     <!-- Mauerplätze zwischen den Zellen -->
@@ -153,10 +180,81 @@ const lage = (p: Platz) => ({ gridRow: p.zeile, gridColumn: p.spalte })
       :aria-label="`Mauer ${p.mauer}`"
       :aria-pressed="gesetzt.has(p.mauer)"
       :disabled="!bearbeitbar"
-      class="rounded-sm"
+      class="rounded-sm transition-colors duration-300"
       :class="[mauerKlasse(p.mauer), bearbeitbar ? 'cursor-pointer' : 'cursor-default']"
       :style="lage(p)"
       @click="emit('mauer', p.mauer)"
     />
+
+    <!-- Ebene für die Figur: deckt alle Felder ab, lässt Klicks aber durch -->
+    <div
+      class="pointer-events-none relative"
+      style="grid-row: 2 / span 11; grid-column: 2 / span 11"
+    >
+      <Transition name="figur">
+        <span
+          v-if="figur && figurLage"
+          data-test="figur"
+          :data-zelle="figur"
+          class="figur absolute flex items-center justify-center"
+          :style="figurLage"
+        >
+          <span class="h-1/2 w-1/2 rounded-full bg-slate-900 shadow-md" />
+        </span>
+      </Transition>
+    </div>
   </div>
 </template>
+
+<style scoped>
+/* Die Figur gleitet zum nächsten Feld */
+.figur {
+  transition:
+    left 350ms ease-in-out,
+    top 350ms ease-in-out;
+}
+
+/* Neue Plättchen springen kurz auf */
+.plaettchen-enter-active {
+  animation: aufspringen 300ms ease-out;
+}
+
+/* Der Schatz taucht mit einer Drehung auf, etwa beim Aufdecken nach Spielende */
+.schatz-enter-active {
+  animation: auftauchen 500ms ease-out;
+}
+
+.figur-enter-active,
+.figur-leave-active {
+  transition: opacity 200ms;
+}
+.figur-enter-from,
+.figur-leave-to {
+  opacity: 0;
+}
+
+@keyframes aufspringen {
+  from {
+    transform: scale(0);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.15);
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes auftauchen {
+  from {
+    transform: scale(0) rotate(-90deg);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1) rotate(0);
+    opacity: 1;
+  }
+}
+</style>

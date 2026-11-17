@@ -44,18 +44,41 @@ describe('LabyrinthFeld', () => {
       figur: 'B2',
       besucht: ['A1', 'B1'],
     })
-    expect(w.find('[data-test=mauer-A1_A2]').classes()).toContain('bg-orange-400')
+    expect(w.find('[data-test=mauer-A1_A2]').classes()).toContain('bg-blue-600')
     expect(w.find('[data-test=mauer-C3_C4]').classes()).toContain('bg-red-600')
     expect(w.find('[data-test=mauer-A1_A2]').attributes('aria-pressed')).toBe('true')
     expect(w.find('[data-test=zelle-F6] [data-test=schatz]').exists()).toBe(true)
-    expect(w.find('[data-test=zelle-B2] [data-test=figur]').exists()).toBe(true)
+    expect(w.find('[data-test=figur][data-zelle=B2]').exists()).toBe(true)
     expect(w.findAll('[data-test=besucht]')).toHaveLength(2)
+    expect(w.find('[data-test=besucht]').classes()).toContain('bg-blue-600')
   })
 
   it('nutzt beim Gegner die Farben aus design.md', () => {
-    const w = feld({ art: 'gegner', mauern: ['A1_A2'] })
+    const w = feld({ art: 'gegner', mauern: ['A1_A2'], besucht: ['A1'] })
     expect(w.find('[data-test=zelle-A1]').classes()).toContain('bg-orange-300')
-    expect(w.find('[data-test=mauer-A1_A2]').classes()).toContain('bg-blue-600')
+    expect(w.find('[data-test=mauer-A1_A2]').classes()).toContain('bg-orange-600')
+    expect(w.find('[data-test=besucht]').classes()).toContain('bg-orange-600')
+  })
+
+  it('zeichnet Plättchen in beiden Irrgärten gleich groß', () => {
+    const eigen = feld({ besucht: ['A1'] })
+      .find('[data-test=besucht]')
+      .classes()
+    const gegner = feld({ art: 'gegner', besucht: ['A1'] })
+      .find('[data-test=besucht]')
+      .classes()
+    expect(eigen.filter((k) => !k.startsWith('bg-'))).toEqual(
+      gegner.filter((k) => !k.startsWith('bg-')),
+    )
+  })
+
+  it('zeigt einen pulsierenden Ring, wenn die Figur auf dem Schatz steht', () => {
+    expect(feld({ schatz: 'C3', figur: 'C2' }).find('[data-test=schatz-gefunden]').exists()).toBe(
+      false,
+    )
+    expect(feld({ schatz: 'C3', figur: 'C3' }).find('[data-test=schatz-gefunden]').exists()).toBe(
+      true,
+    )
   })
 
   it('zeigt eine markierte Mauer nicht mehr rot, sobald sie entfernt ist', () => {

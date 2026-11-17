@@ -120,7 +120,7 @@ describe('SpielView im Aufbau', () => {
     expect(wrapper.find('[data-test=rest-mauern]').text()).toContain('Noch 30')
 
     await wrapper.find('[data-test=mauer-A1_A2]').trigger('click')
-    expect(wrapper.find('[data-test=mauer-A1_A2]').classes()).toContain('bg-orange-400')
+    expect(wrapper.find('[data-test=mauer-A1_A2]').classes()).toContain('bg-blue-600')
     expect(wrapper.find('[data-test=rest-mauern]').text()).toContain('Noch 29')
     await flushPromises()
 
@@ -174,8 +174,8 @@ describe('SpielView im Aufbau', () => {
 
     expect(wrapper.find('[data-test=pruefung]').text()).toBe('Antwort 2')
     // Beide Mauern bleiben sichtbar, der lokale Entwurf ist führend
-    expect(wrapper.find('[data-test=mauer-A1_A2]').classes()).toContain('bg-orange-400')
-    expect(wrapper.find('[data-test=mauer-B2_B3]').classes()).toContain('bg-orange-400')
+    expect(wrapper.find('[data-test=mauer-A1_A2]').classes()).toContain('bg-blue-600')
+    expect(wrapper.find('[data-test=mauer-B2_B3]').classes()).toContain('bg-blue-600')
   })
 
   it('meldet einen Fehler beim Speichern und behält die Mauer', async () => {
@@ -190,7 +190,7 @@ describe('SpielView im Aufbau', () => {
     await wrapper.find('[data-test=mauer-A1_A2]').trigger('click')
     await flushPromises()
     expect(wrapper.find('[data-test=speicher-fehler]').text()).toContain('Nicht gespeichert')
-    expect(wrapper.find('[data-test=mauer-A1_A2]').classes()).toContain('bg-orange-400')
+    expect(wrapper.find('[data-test=mauer-A1_A2]').classes()).toContain('bg-blue-600')
   })
 
   it('sperrt das Feld, sobald das Labyrinth gesetzt ist', async () => {
@@ -414,7 +414,7 @@ describe('SpielView im Spiel', () => {
     const anfrage = attrappe.mock.calls.find(([url]) => String(url).endsWith('/queries'))!
     expect(JSON.parse(anfrage[1]?.body as string)).toEqual({ anfrageNr: 1, ziel: 'A4' })
     expect(wrapper.find('[data-test=verlauf]').text()).toContain('Du: A4, Ja, weiter auf A4')
-    expect(gegner().find('[data-test=zelle-A4] [data-test=figur]').exists()).toBe(true)
+    expect(gegner().find('[data-test=figur][data-zelle=A4]').exists()).toBe(true)
   })
 
   it('spielt den Zug des Computers Schritt für Schritt auf dem eigenen Feld ab', async () => {
@@ -448,14 +448,14 @@ describe('SpielView im Spiel', () => {
 
     // Wiedergabe läuft: Figur des Computers noch am Start, ich darf nicht fragen
     expect(wrapper.find('[data-test=zug]').text()).toContain('Computer sucht')
-    expect(eigen().find('[data-test=zelle-A1] [data-test=figur]').exists()).toBe(true)
+    expect(eigen().find('[data-test=figur][data-zelle=A1]').exists()).toBe(true)
     expect(gegner().find('[data-test=zelle-A4]').attributes('disabled')).toBeDefined()
 
     await vi.advanceTimersByTimeAsync(700)
-    expect(eigen().find('[data-test=zelle-C1] [data-test=figur]').exists()).toBe(true)
+    expect(eigen().find('[data-test=figur][data-zelle=C1]').exists()).toBe(true)
 
     await vi.advanceTimersByTimeAsync(700)
-    expect(eigen().find('[data-test=zelle-C2] [data-test=figur]').exists()).toBe(true)
+    expect(eigen().find('[data-test=figur][data-zelle=C2]').exists()).toBe(true)
     expect(wrapper.find('[data-test=zug]').text()).toContain('Du bist am Zug')
     const verlauf = wrapper.find('[data-test=verlauf]').text()
     expect(verlauf).toContain('Computer: C3, Nur bis C2')
@@ -514,7 +514,7 @@ describe('SpielView im Spiel', () => {
     expect(wrapper.find('[data-test=ergebnis]').text()).toContain('Gewonnen!')
     expect(wrapper.find('[data-test=ergebnis]').text()).toContain('Schatz gefunden')
     expect(gegner().find('[data-test=zelle-A3] [data-test=schatz]').exists()).toBe(true)
-    expect(gegner().find('[data-test=mauer-A1_B1]').classes()).toContain('bg-blue-600')
+    expect(gegner().find('[data-test=mauer-A1_B1]').classes()).toContain('bg-orange-600')
     expect(wrapper.find('[data-test=aufgeben]').exists()).toBe(false)
   })
 

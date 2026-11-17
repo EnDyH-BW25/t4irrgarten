@@ -397,12 +397,14 @@ onUnmounted(() => {
       <div
         v-if="match.status === 'startbereit'"
         data-test="bereitschaft"
-        class="fixed inset-0 z-10 flex items-center justify-center bg-slate-900/60 p-4"
+        class="fixed inset-0 z-10 flex animate-einblenden items-center justify-center bg-slate-900/60 p-4"
         role="dialog"
         aria-modal="true"
         aria-labelledby="bereitschaft-titel"
       >
-        <div class="w-full max-w-sm space-y-4 rounded-lg bg-white p-6 text-center shadow-lg">
+        <div
+          class="w-full max-w-sm animate-hineinzoomen space-y-4 rounded-lg bg-white p-6 text-center shadow-lg"
+        >
           <p id="bereitschaft-titel" class="font-titel text-2xl">Bist du bereit zu spielen?</p>
           <p
             v-if="restSek !== null"
@@ -433,7 +435,7 @@ onUnmounted(() => {
       <div
         v-if="match.status === 'abgebrochen'"
         data-test="ergebnis"
-        class="rounded-lg bg-slate-200 p-4 text-center text-slate-800"
+        class="animate-hineinzoomen rounded-lg bg-slate-200 p-4 text-center text-slate-800"
       >
         <p class="font-titel text-2xl">Abgebrochen</p>
         <!-- Nur ein Spieler: Im Warteraum ist niemand beigetreten oder der Ersteller hat abgebrochen -->
@@ -450,7 +452,7 @@ onUnmounted(() => {
       <div
         v-else-if="vorbei"
         data-test="ergebnis"
-        class="rounded-lg p-4 text-center"
+        class="animate-hineinzoomen rounded-lg p-4 text-center"
         :class="
           match.siegerId === meineId ? 'bg-green-100 text-green-900' : 'bg-red-100 text-red-900'
         "
@@ -474,7 +476,7 @@ onUnmounted(() => {
       <div
         v-else-if="match.status === 'wartet'"
         data-test="warteraum"
-        class="mx-auto w-full max-w-sm space-y-4 rounded-lg bg-white p-6 text-center shadow-lg"
+        class="mx-auto w-full max-w-sm animate-hineinzoomen space-y-4 rounded-lg bg-white p-6 text-center shadow-lg"
       >
         <p class="font-titel text-xl">Warte auf deinen Gegner</p>
         <p class="text-sm text-slate-600">Gib ihm diesen Spielcode:</p>
