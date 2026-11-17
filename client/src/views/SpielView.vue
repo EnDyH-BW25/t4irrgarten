@@ -1,3 +1,19 @@
+<!--
+  SPIELVIEW (Route /spiel/:id): das eigentliche Spiel, für Computer-Match, Duell und Turnier
+  Der Match-Status steuert, was die Seite zeigt:
+    wartet       Warteraum mit Spielcode (nur Duell, ADR-032)
+    aufbau       eigenen Irrgarten bauen: Mauern, Schatz, Live-Prüfung, "Irrgarten setzen"
+    startbereit  Overlay "Bist du bereit?" (ADR-008)
+    laeuft       Anfragen im Gegner-Irrgarten, Anfragebox, Wiedergabe der Gegnerzüge
+    beendet / abgebrochen  Ergebnisbox, Gegner-Irrgarten aufgedeckt
+  Grundregeln:
+  - Der Server ist die Wahrheit. Jede Antwort mit Match läuft durch uebernehmen().
+  - Polling alle 1,5 s mit since=version: 304 = nichts neu (ADR-012/019)
+  - Kein Timer auf dem Server: Abrufe stoßen Fristen an (ADR-028)
+  - Aufbau ist optimistisch: Klick zeigt sofort, PUT speichert im Hintergrund
+  Gliederung des Scripts: Zustand je Phase, abgeleitete Werte, Laden/Polling,
+  Aufbau, Bereitschaft, Anfragen + Wiedergabe, Lifecycle.
+-->
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { RouterLink, useRouter } from 'vue-router'
@@ -23,7 +39,9 @@ import LabyrinthFeld from '@/components/LabyrinthFeld.vue'
 const props = defineProps<{ id: string }>()
 const router = useRouter()
 
+/** Letzter Stand vom Server; daraus leitet sich fast alles andere per computed ab */
 const match = ref<Match | null>(null)
+/** Schwerer Fehler (z. B. 403 fremdes Match): ersetzt die ganze Seite durch die Meldung */
 const meldung = ref<string | null>(null)
 
 // ---------- Aufbau ----------
@@ -83,16 +101,20 @@ const versatzMs = ref(0)
 const jetzt = ref(Date.now())
 let uhr: ReturnType<typeof setInterval> | undefined
 let polling: ReturnType<typeof setInterval> | undefined
+/** Ein Abruf läuft schon; verhindert, dass sich langsame Abrufe überholen */
 let fragtAb = false
 
 // ---------- Abgeleitete Werte ----------
+// computed: rechnet automatisch neu, sobald sich match, entwurf oder jetzt ändern
 
+/** Darf ich mein Feld bearbeiten? Nur im Aufbau und nur, solange ich nicht gesetzt habe */
 const imAufbau = computed(
   () => match.value?.status === 'aufbau' && !match.value.ich.labyrinthGesetzt,
 )
 const vorbei = computed(
   () => match.value?.status === 'beendet' || match.value?.status === 'abgebrochen',
 )
+// Fallback ohne nutzer (z. B. in Tests): der Spieler, der kein Computer ist
 const meineId = computed(
   () => nutzer.value?.id ?? match.value?.spieler.find((s) => !s.istComputer)?.id,
 )
@@ -148,7 +170,10 @@ const restSek = computed(() =>
   frist.value ? restSekunden(frist.value.ende, versatzMs.value, jetzt.value) : null,
 )
 
-/** Felder im Gegner-Labyrinth, die ich gerade anfragen darf */
+/**
+ * Felder im Gegner-Labyrinth, die ich gerade anfragen darf
+ * Leer (= nichts klickbar), wenn ich nicht dran bin, eine Anfrage läuft oder die Wiedergabe läuft
+ */
 const ziele = computed<Zelle[]>(() =>
   ichBinDran.value && !fragt.value && !abspielKarte.value && match.value
     ? geradeZiele(match.value.bekannteKarte.position)
@@ -183,10 +208,12 @@ function fehlertext(e: unknown) {
   return e instanceof ApiFehler ? e.message : 'Unbekannter Fehler.'
 }
 
+/** Pause als Promise: "await warten(700)" hält die Funktion 700 ms an, ohne die Seite zu blockieren */
 const warten = (ms: number) => new Promise((fertig) => setTimeout(fertig, ms))
 
 // ---------- Laden und Polling ----------
 
+/** Erster Abruf ohne since; übernimmt auch den gespeicherten Entwurf (z. B. nach F5) */
 async function laden() {
   try {
     const geladen = await get<Match>(`/matches/${props.id}`)
@@ -212,6 +239,8 @@ async function abfrageTick() {
   fragtAb = true
   try {
     const neu = await abfragen<Match>(`/matches/${props.id}`, match.value.version)
+    // neu = null bei 304. Nur eine höhere Version übernehmen: Eine eigene PUT/POST-Antwort
+    // kann inzwischen neuer sein als dieser Abruf.
     if (neu && neu.version > alt.version) {
       uebernehmen(neu)
       if (istDuell.value) gegnerNachspielen(alt, neu)
@@ -239,8 +268,13 @@ function aendern(neu: LabyrinthEntwurf) {
   letzteSpeicherung = speichern(neu)
 }
 
+/**
+ * PUT des Entwurfs. Die Antwort enthält die Live-Prüfung (loesbar, problematischeMauern).
+ * Beispiel schnelle Klicks: PUT 1 und PUT 2 laufen, Antwort 2 kommt vor Antwort 1.
+ * Antwort 1 hat nr 1, speicherNr ist schon 2 => verworfen. So springt das Feld nicht zurück.
+ */
 async function speichern(neu: LabyrinthEntwurf) {
-  const nr = ++speicherNr
+  const nr = ++speicherNr // erst erhöhen, dann merken: Diese Anfrage hat die neueste Nummer
   offeneSpeicherungen++
   try {
     const antwort = await put<Match>(`/matches/${props.id}/labyrinth`, neu)
@@ -256,6 +290,7 @@ async function speichern(neu: LabyrinthEntwurf) {
   }
 }
 
+// Klick-Handler für die Emits aus LabyrinthFeld. Die Regel steckt in brett.ts, null = verboten.
 function mauerKlick(mauer: Mauer) {
   const neu = mauerUmschalten(entwurf.value, mauer)
   if (neu) aendern(neu)
@@ -330,8 +365,11 @@ async function anfragen(ziel: Zelle) {
   // Die Anfrage erscheint sofort in der Box, die Antwort erst nach der Pause
   anzeige.value = { wer: 'Du', ziel, antwort: null, feld: 'gegner' }
   try {
+    // Request und Mindestpause parallel: Die Antwort erscheint frühestens nach ANFRAGE_ANZEIGE_MS,
+    // auch wenn der Server schneller ist. So bleibt die Anfrage kurz lesbar (ADR-037).
     const [antwort] = await Promise.all([
       post<AnfrageAntwort>(`/matches/${props.id}/queries`, {
+        // anfrageNr: Der Server lehnt eine doppelte oder veraltete Anfrage mit 409 ab
         anfrageNr: match.value.anfrageNr,
         ziel,
       }),
@@ -342,6 +380,7 @@ async function anfragen(ziel: Zelle) {
     antwortLesbar = warten(ANTWORT_ANZEIGE_MS)
     antwortNr.value++
     uebernehmen(antwort.match)
+    // Gegen den Computer: Der Server hat dessen ganzen Zug schon gespielt und schickt ihn mit
     computerZug = antwort.computerAnfragen ?? []
   } catch (e) {
     anzeige.value = null
@@ -355,7 +394,10 @@ async function anfragen(ziel: Zelle) {
   if (computerZug.length && vorher) await einreihen(vorher, computerZug)
 }
 
-/** Anfragen des Gegners, die noch abgespielt werden, älteste zuerst */
+// ---------- Wiedergabe der Gegnerzüge ----------
+// Zwei Quellen, eine Warteschlange: Computerzug aus der Anfrage-Antwort, Duell-Züge aus dem Polling.
+
+/** Anfragen des Gegners, die noch abgespielt werden, älteste zuerst (FIFO) */
 const warteschlange: AnfrageErgebnis[] = []
 let wiedergabe: Promise<void> | null = null
 
@@ -398,6 +440,7 @@ async function abspielen(start: BekannteKarte) {
 
 /** Duell: Das Polling bringt neue Anfragen des Gegners. Die spielt die Box nach. */
 function gegnerNachspielen(alt: Match, neu: Match) {
+  // Differenz bilden: alt kannte 3 Anfragen, neu kennt 5 => slice(3) liefert die 2 neuen
   const bisher = alt.gegnerAnfragen?.length ?? 0
   const neue = (neu.gegnerAnfragen ?? []).slice(bisher)
   if (neue.length && alt.gegnerKarte) einreihen(alt.gegnerKarte, neue)
@@ -426,6 +469,9 @@ async function aufgebenKlicken() {
   }
 }
 
+// ---------- Lifecycle ----------
+// Seite öffnet: laden, Uhr (1 s) und Polling (POLL_MS) starten.
+// Seite schließt: beide Timer stoppen, sonst fragt ein unsichtbarer Tab weiter ab.
 onMounted(() => {
   laden()
   uhr = setInterval(() => (jetzt.value = Date.now()), 1000)
@@ -600,6 +646,7 @@ onUnmounted(() => {
         </p>
       </div>
 
+      <!-- Zwei Spielfelder nebeneinander (ab md), auf dem Handy untereinander -->
       <div v-if="match.status !== 'wartet'" class="grid gap-6 md:grid-cols-2">
         <!-- Links: mein Irrgarten. Im Spiel erscheint hier die Spur des Gegners. -->
         <div class="space-y-2">
@@ -689,6 +736,7 @@ onUnmounted(() => {
         <!-- Rechts: Irrgarten des Gegners mit meiner Suche; nach Spielende ganz aufgedeckt -->
         <div class="space-y-2">
           <h2 class="font-titel text-lg">Irrgarten des Gegners</h2>
+          <!-- Während des Spiels nur entdeckte Mauern; gegnerLabyrinth schickt der Server erst am Ende -->
           <LabyrinthFeld
             art="gegner"
             :mauern="match.gegnerLabyrinth?.mauern ?? match.bekannteKarte.entdeckteMauern"

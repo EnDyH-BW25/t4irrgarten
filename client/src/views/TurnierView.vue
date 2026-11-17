@@ -1,3 +1,12 @@
+<!--
+  TURNIERVIEW (Route /turnier/:id): Warteraum und Übersicht eines Turniers (ADR-036)
+  Zwei Zustände:
+  1. status wartet: Code (nur Host), Teilnehmerliste, "Turnier starten" ab 3 Spielern
+  2. sonst: Runden mit Paarungen, Wartebildschirm, am Ende Platzierung oder Abbruch
+  Das Turnier ist nur eine Hülle (ADR-034). Gespielt wird in SpielView.
+  Hat der Nutzer ein offenes Match, springt die Seite automatisch dorthin.
+  Gleiches Muster wie SpielView: laden + uebernehmen + Polling + Uhr für den Countdown.
+-->
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -9,16 +18,17 @@ import { SCHWIERIGKEITEN, STATUS_TEXT, turnierStandText } from '@/anzeige'
 import { POLL_MS, restSekunden, zeitText } from '@/countdown'
 import { turnierAbrufen, turnierStarten, turnierVerlassen } from '@/turniere'
 
-const props = defineProps<{ id: string }>()
+const props = defineProps<{ id: string }>() // aus der URL, dank props: true im Router
 const router = useRouter()
 
-const turnier = ref<Turnier | null>(null)
+const turnier = ref<Turnier | null>(null) // null, bis der erste Abruf da ist
 const meldung = ref<string | null>(null)
 const sendet = ref(false)
 
 // Countdown des Codes wie in der Spielansicht: Serverzeit minus Browserzeit gleicht die Uhr aus
 const versatzMs = ref(0)
-const jetzt = ref(Date.now())
+const jetzt = ref(Date.now()) // tickt jede Sekunde, dadurch rechnet restSek neu
+// Kennungen der Timer, damit onUnmounted sie stoppen kann. Kein ref: Die Anzeige braucht sie nicht.
 let uhr: ReturnType<typeof setInterval> | undefined
 let polling: ReturnType<typeof setInterval> | undefined
 
@@ -59,6 +69,7 @@ async function laden() {
   }
 }
 
+/** Nur der Host: Der Server mischt die Spieler, füllt mit dem Computer auf und legt Runde 1 an */
 async function starten() {
   sendet.value = true
   try {
@@ -92,7 +103,10 @@ const computerText = computed(
   () => SCHWIERIGKEITEN.find((s) => s.wert === turnier.value?.schwierigkeit)?.text ?? '',
 )
 
-/** Überschrift einer Paarung: in Runde 1 durchnummeriert, in Runde 2 nach Platz */
+/**
+ * Überschrift einer Paarung: in Runde 1 durchnummeriert, in Runde 2 nach Platz
+ * platzUm: In Runde 2 spielen die Sieger um Platz 1/2, die Verlierer um Platz 3/4.
+ */
 function paarungTitel(p: Paarung, i: number): string {
   if (p.platzUm[0] === 1) return 'Finale (Platz 1 und 2)'
   if (p.platzUm[0] === 3) return 'Spiel um Platz 3'
@@ -108,8 +122,11 @@ function paarungStand(p: Paarung): string {
   return STATUS_TEXT[p.status]
 }
 
+// Eigene Paarung bekommt einen blauen Rahmen
 const istMeine = (p: Paarung) => [p.spielerA.id, p.spielerB.id].includes(meineId.value ?? '')
 
+// Beim Öffnen: sofort laden, dann Uhr (1 s) und Polling (1,5 s) starten.
+// Beim Verlassen der Seite: beide Timer stoppen, sonst liefen sie im Hintergrund weiter.
 onMounted(() => {
   laden()
   uhr = setInterval(() => (jetzt.value = Date.now()), 1000)
