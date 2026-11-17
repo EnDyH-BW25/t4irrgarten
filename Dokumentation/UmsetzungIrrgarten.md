@@ -63,5 +63,7 @@ Die Reihenfolge folgt den Abhängigkeiten. Jede Phase endet mit einem spielbaren
 # Phase 8: Abschluss (½ Tag)
 
 - End-to-End-Durchlauf, Fehlermeldungen vervollständigen, Doku und OpenAPI abgleichen
-
-Gesamt: etwa 8 bis 9 Arbeitstage. Wenn die Zeit knapp wird, ist Phase 6 das letzte Muss. Nach Phase 6 hast du ein vollständiges Spiel mit Login, Computer-Gegner, Live-Duell und Statistik. Das Turnier lässt sich dann gekürzt nachliefern.
+- UML-Diagramm überarbeiten
+- Lernreflexion schreiben
+- 5 Präsentationsfolien erstellen
+- Demo vorbereiten & durchgehen
