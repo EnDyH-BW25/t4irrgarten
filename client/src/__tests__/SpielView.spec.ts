@@ -1,8 +1,9 @@
 import type { Match } from '@shared/types.ts'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import SpielView from '../views/SpielView.vue'
+import { nutzer } from '../anmeldung'
 import { beispielMatch, serverAttrappe } from './hilfen'
 
 async function aufbauen(id = 'match-1') {
@@ -673,5 +674,128 @@ describe('SpielView: Fristen (Phase 4)', () => {
     const { wrapper } = await aufbauen()
     const text = wrapper.find('[data-test=anfragen]').text().replace(/\s+/g, ' ')
     expect(text).toBe('Anfragen: Du 12 · Computer 15')
+  })
+})
+
+describe('SpielView im Duell (Phase 5)', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    nutzer.value = null
+  })
+
+  const ANNA = { id: 'id-1', name: 'Anna', istComputer: false, anfragen: 0 }
+  const BEN = { id: 'id-2', name: 'Ben', istComputer: false, anfragen: 0 }
+  const GESETZT = { labyrinthGesetzt: true, startBestaetigt: true, nachbesserungEndeAm: null }
+
+  /** Annas Sicht im Warteraum: nur sie, Code läuft noch 10 Minuten */
+  const warteraum = (aenderungen: Partial<Match> = {}) =>
+    beispielMatch({
+      modus: 'duell',
+      schwierigkeit: null,
+      status: 'wartet',
+      code: 'K7M2P',
+      codeEndeAm: '2026-11-16T10:10:00.000Z',
+      spieler: [ANNA],
+      aufbauEndeAm: null,
+      pruefung: null,
+      gegner: null,
+      gegnerKarte: null,
+      gegnerAnfragen: null,
+      ...aenderungen,
+    })
+
+  /** Annas Sicht im laufenden Duell gegen Ben */
+  const duell = (aenderungen: Partial<Match> = {}) =>
+    beispielMatch({
+      modus: 'duell',
+      schwierigkeit: null,
+      status: 'laeuft',
+      spieler: [ANNA, BEN],
+      aufbauEndeAm: null,
+      zugEndeAm: '2026-11-16T10:01:00.000Z',
+      pruefung: null,
+      ich: GESETZT,
+      gegner: GESETZT,
+      amZug: 'id-2',
+      meinLabyrinth: { schatz: 'F6', mauern: ['A1_B1'] },
+      ...aenderungen,
+    })
+
+  beforeEach(() => {
+    nutzer.value = { id: 'id-1', name: 'Anna', schwierigkeit: 'standard' }
+  })
+
+  it('Warteraum zeigt Code, Restzeit und Abbrechen, aber keine Spielfelder', async () => {
+    vi.useFakeTimers({ now: new Date('2026-11-16T10:00:00.000Z'), toFake: ['Date'] })
+    serverAttrappe({ '/api/matches/match-1': () => Response.json(warteraum()) })
+    const { wrapper } = await aufbauen()
+
+    expect(wrapper.find('[data-test=titel]').text()).toBe('Duell')
+    expect(wrapper.find('[data-test=code]').text()).toBe('K7M2P')
+    expect(wrapper.find('[data-test=code-countdown]').text()).toContain('10:00')
+    expect(wrapper.find('[data-test=aufgeben]').text()).toBe('Abbrechen')
+    expect(wrapper.find('[data-test=zelle-A1]').exists()).toBe(false)
+  })
+
+  it('Polling bemerkt den Beitritt: Warteraum weg, Aufbau gegen Ben beginnt', async () => {
+    vi.useFakeTimers({ toFake: ['setInterval', 'clearInterval'] })
+    let stand = warteraum()
+    // Jede URL, auch mit since, liefert den aktuellen Stand
+    vi.stubGlobal(
+      'fetch',
+      vi.fn<typeof fetch>(async () => Response.json(stand)),
+    )
+    const { wrapper } = await aufbauen()
+    expect(wrapper.find('[data-test=warteraum]').exists()).toBe(true)
+
+    stand = beispielMatch({ version: 2, modus: 'duell', schwierigkeit: null, spieler: [ANNA, BEN] })
+    await vi.advanceTimersByTimeAsync(1500)
+    expect(wrapper.find('[data-test=warteraum]').exists()).toBe(false)
+    expect(wrapper.find('[data-test=titel]').text()).toBe('Duell gegen Ben')
+    expect(wrapper.find('[data-test=setzen]').exists()).toBe(true)
+  })
+
+  it('Live-Kasten zeigt die Anfragen des Gegners, neueste oben', async () => {
+    serverAttrappe({
+      '/api/matches/match-1': () =>
+        Response.json(
+          duell({
+            gegnerAnfragen: [
+              { ziel: 'A3', ergebnis: 'ja', position: 'A3', mauer: null },
+              { ziel: 'D3', ergebnis: 'nurBis', position: 'C3', mauer: 'C3_D3' },
+            ],
+          }),
+        ),
+    })
+    const { wrapper } = await aufbauen()
+    const kasten = wrapper.find('[data-test=live-kasten]')
+
+    expect(kasten.text()).toContain('Ben sucht deinen Schatz')
+    expect(kasten.text()).toContain('2 Anfragen')
+    const zeilen = kasten.findAll('[data-test=live-liste] li').map((li) => li.text())
+    expect(zeilen).toEqual(['D3: Nur bis C3, dann eine Mauer', 'A3: Ja, weiter auf A3'])
+    expect(wrapper.find('[data-test=zug]').text()).toBe('Ben ist am Zug.')
+  })
+
+  it('Live-Kasten ohne Anfragen sagt das; gegen den Computer gibt es ihn nicht', async () => {
+    serverAttrappe({ '/api/matches/match-1': () => Response.json(duell()) })
+    const { wrapper } = await aufbauen()
+    expect(wrapper.find('[data-test=live-kasten]').text()).toContain('Noch keine Anfragen')
+    wrapper.unmount()
+
+    serverAttrappe({
+      '/api/matches/match-1': () => Response.json(duell({ modus: 'computer' })),
+    })
+    const computer = await aufbauen()
+    expect(computer.wrapper.find('[data-test=live-kasten]').exists()).toBe(false)
+  })
+
+  it('abgelaufener Code: "Niemand ist beigetreten" statt "Keiner war bereit"', async () => {
+    serverAttrappe({
+      '/api/matches/match-1': () =>
+        Response.json(warteraum({ status: 'abgebrochen', code: null, codeEndeAm: null })),
+    })
+    const { wrapper } = await aufbauen()
+    expect(wrapper.find('[data-test=ergebnis]').text()).toContain('Niemand ist beigetreten')
   })
 })

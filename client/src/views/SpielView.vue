@@ -85,6 +85,20 @@ const ichBinDran = computed(
 )
 const restMauern = computed(() => MAX_MAUERN - entwurf.value.mauern.length)
 
+/** Name des Gegners für alle Texte; im Warteraum gibt es noch keinen */
+const gegnerName = computed(
+  () => match.value?.spieler.find((s) => s.id !== meineId.value)?.name ?? 'Der Gegner',
+)
+const istDuell = computed(() => match.value?.modus === 'duell')
+
+const titel = computed(() => {
+  if (!istDuell.value) return 'Spiel gegen den Computer'
+  return match.value?.status === 'wartet' ? 'Duell' : `Duell gegen ${gegnerName.value}`
+})
+
+/** Live-Kasten im Duell: Anfragen des Gegners, neueste oben */
+const gegnerZuege = computed(() => [...(match.value?.gegnerAnfragen ?? [])].reverse())
+
 /**
  * Die Frist, die gerade zählt: Aufbau oder Nachbesserung, Bereitschaft oder Zug.
  * rotAb nennt die Sekunden, ab denen der Countdown rot wird.
@@ -92,6 +106,9 @@ const restMauern = computed(() => MAX_MAUERN - entwurf.value.mauern.length)
 const frist = computed<{ ende: string; titel: string; rotAb: number } | null>(() => {
   const m = match.value
   if (!m) return null
+  if (m.status === 'wartet' && m.codeEndeAm) {
+    return { ende: m.codeEndeAm, titel: 'So lange gilt der Spielcode', rotAb: 60 }
+  }
   if (m.status === 'aufbau') {
     if (m.ich.nachbesserungEndeAm) {
       return { ende: m.ich.nachbesserungEndeAm, titel: 'Restzeit zum Nachbessern', rotAb: 30 }
@@ -133,7 +150,7 @@ const zugText = computed(() => {
   if (abspielKarte.value) return 'Der Computer sucht ...'
   return ichBinDran.value
     ? 'Du bist am Zug. Wähle ein Feld im Irrgarten des Gegners.'
-    : 'Der Computer ist am Zug.'
+    : `${gegnerName.value} ist am Zug.`
 })
 
 // ---------- Hilfen ----------
@@ -260,10 +277,13 @@ async function starten() {
     const gestartet = await post<Match>(`/matches/${props.id}/ready`)
     uebernehmen(gestartet)
     // Hat der Computer die Auslosung gewonnen, ist sein erster Zug schon gespielt
-    if (gestartet.anfrageNr > 1) {
-      verlauf.value.unshift('Der Computer hat die Auslosung gewonnen und ist schon gezogen.')
-    } else if (gestartet.status === 'laeuft') {
+    if (gestartet.status !== 'laeuft') return
+    if (gestartet.amZug === meineId.value) {
       verlauf.value.unshift('Du hast die Auslosung gewonnen und beginnst.')
+    } else if (gestartet.anfrageNr > 1) {
+      verlauf.value.unshift('Der Computer hat die Auslosung gewonnen und ist schon gezogen.')
+    } else {
+      verlauf.value.unshift(`${gegnerName.value} hat die Auslosung gewonnen und beginnt.`)
     }
   } catch (e) {
     startFehler.value = fehlertext(e)
@@ -355,7 +375,7 @@ onUnmounted(() => {
         >
           {{ zeitText(restSek) }}
         </p>
-        <h1 class="font-titel text-2xl">Spiel gegen den Computer</h1>
+        <h1 data-test="titel" class="font-titel text-2xl">{{ titel }}</h1>
         <p data-test="status" class="text-slate-600">
           {{ STATUS_TEXT[match.status] }}
           <template v-if="match.schwierigkeit">
@@ -407,7 +427,11 @@ onUnmounted(() => {
         class="rounded-lg bg-slate-200 p-4 text-center text-slate-800"
       >
         <p class="font-titel text-2xl">Abgebrochen</p>
-        <p class="text-sm">Keiner war rechtzeitig bereit. Das Spiel zählt nicht.</p>
+        <!-- Nur ein Spieler: Im Warteraum ist niemand beigetreten oder der Ersteller hat abgebrochen -->
+        <p v-if="match.spieler.length === 1" class="text-sm">
+          Niemand ist beigetreten. Das Spiel zählt nicht.
+        </p>
+        <p v-else class="text-sm">Keiner war rechtzeitig bereit. Das Spiel zählt nicht.</p>
         <RouterLink to="/dashboard" class="mt-2 inline-block underline">Zum Dashboard</RouterLink>
       </div>
 
@@ -433,9 +457,61 @@ onUnmounted(() => {
         <RouterLink to="/dashboard" class="mt-2 inline-block underline">Zum Dashboard</RouterLink>
       </div>
 
+      <!-- Warteraum (ADR-009): Code weitergeben, bis der Gegner beitritt -->
+      <div
+        v-else-if="match.status === 'wartet'"
+        data-test="warteraum"
+        class="mx-auto w-full max-w-sm space-y-4 rounded-lg bg-white p-6 text-center shadow-lg"
+      >
+        <p class="font-titel text-xl">Warte auf deinen Gegner</p>
+        <p class="text-sm text-slate-600">Gib ihm diesen Spielcode:</p>
+        <p data-test="code" class="font-titel text-5xl tracking-widest select-all">
+          {{ match.code }}
+        </p>
+        <p class="text-sm text-slate-600">
+          Er wählt "Live-Gegner", dann "Spiel beitreten" und gibt den Code ein. Sobald er beitritt,
+          beginnt für euch beide der Aufbau.
+        </p>
+        <p
+          v-if="restSek !== null"
+          data-test="code-countdown"
+          class="text-sm tabular-nums"
+          :class="restSek <= 60 ? 'text-red-600' : 'text-slate-600'"
+        >
+          Der Code gilt noch {{ zeitText(restSek) }}.
+        </p>
+      </div>
+
       <p v-else-if="zugText" data-test="zug" class="font-medium">{{ zugText }}</p>
 
-      <div class="grid gap-6 md:grid-cols-2">
+      <!-- Live-Kasten im Duell: Optik wie das Bereitschafts-Overlay, aber ohne Abdunkeln -->
+      <div
+        v-if="istDuell && (match.status === 'laeuft' || match.status === 'beendet')"
+        data-test="live-kasten"
+        class="space-y-2 rounded-lg bg-white p-4 shadow-lg"
+        aria-live="polite"
+      >
+        <div class="flex items-baseline justify-between gap-2">
+          <h2 class="font-titel text-lg">Live: {{ gegnerName }} sucht deinen Schatz</h2>
+          <span class="text-sm text-slate-600">{{ gegnerZuege.length }} Anfragen</span>
+        </div>
+        <ol
+          v-if="gegnerZuege.length"
+          data-test="live-liste"
+          class="max-h-40 space-y-1 overflow-y-auto text-sm"
+        >
+          <li
+            v-for="(a, i) in gegnerZuege"
+            :key="gegnerZuege.length - i"
+            :class="i === 0 ? 'font-semibold' : 'text-slate-600'"
+          >
+            {{ a.ziel }}: {{ antwortText(a) }}
+          </li>
+        </ol>
+        <p v-else class="text-sm text-slate-600">Noch keine Anfragen.</p>
+      </div>
+
+      <div v-if="match.status !== 'wartet'" class="grid gap-6 md:grid-cols-2">
         <!-- Links: mein Irrgarten. Im Spiel erscheint hier die Spur des Gegners. -->
         <div class="space-y-2">
           <h2 class="font-titel text-lg">Dein Irrgarten</h2>
@@ -547,7 +623,7 @@ onUnmounted(() => {
         class="rounded bg-slate-200 px-3 py-2"
         @click="aufgebenKlicken"
       >
-        Aufgeben
+        {{ match.status === 'wartet' ? 'Abbrechen' : 'Aufgeben' }}
       </button>
     </template>
 
