@@ -71,14 +71,19 @@ async function laden() {
  * `anlegen` liefert. Im Duell zeigt die Spielansicht zuerst den Warteraum, im Turnier die
  * Turnierseite.
  */
-async function starten(anlegen: () => Promise<string>) {
+async function starten(anlegen: () => Promise<string>, meldungBei409 = false) {
   sendet.value = true
   meldung.value = null
   try {
     await router.push(await anlegen())
   } catch (e) {
     // 409: Es gibt doch ein offenes Match, zum Beispiel aus einem anderen Tab
-    if (e instanceof ApiFehler && e.status === 409) await laden()
+    if (e instanceof ApiFehler && e.status === 409) {
+      await laden()
+      // Beim Beitreten muss der Spieler wissen, warum es nicht geklappt hat.
+      // laden() löscht die Meldung, darum steht sie erst danach.
+      if (meldungBei409) fehlerZeigen(e)
+    }
     // Sonst steht die Meldung des Servers da, zum Beispiel "Der Spielcode ist ungültig ..."
     else fehlerZeigen(e)
   } finally {
@@ -100,7 +105,7 @@ function duellErstellen() {
 }
 
 function duellBeitreten() {
-  return starten(async () => `/spiel/${(await beitreten(code.value)).id}`)
+  return starten(async () => `/spiel/${(await beitreten(code.value)).id}`, true)
 }
 
 /** Der Host gibt die Schwierigkeit mit; sie gilt nur für einen auffüllenden Computer (ADR-010) */

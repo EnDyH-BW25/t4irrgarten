@@ -219,8 +219,14 @@ async function abfrageTick() {
       uebernehmen(neu)
       if (istDuell.value) gegnerNachspielen(alt, neu)
     }
-  } catch {
-    // Netz kurz weg: Der nächste Abruf versucht es wieder
+  } catch (e) {
+    // 401 oder 403: Der Tab spricht nicht mehr als Teilnehmer, zum Beispiel nach einer Anmeldung
+    // mit einem anderen Account in einem zweiten Tab. Das muss sichtbar sein.
+    if (e instanceof ApiFehler && (e.status === 401 || e.status === 403)) {
+      meldung.value = fehlertext(e)
+      clearInterval(polling)
+    }
+    // Sonst ist das Netz kurz weg: Der nächste Abruf versucht es wieder
   } finally {
     fragtAb = false
   }

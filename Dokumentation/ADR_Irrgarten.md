@@ -51,6 +51,7 @@ Die Übersicht trennt zwei Angaben.
 | ADR-036 | Turnierseite als Warteraum und Wartebildschirm      | 7           | Akzeptiert                               | umgesetzt |
 | ADR-037 | Anfragebox mit Anfrage vor der Antwort              | 8           | Akzeptiert                               | umgesetzt |
 | ADR-038 | Ausblick: Antwort durch den Gegner                  | 8           | Vorgeschlagen                            | geplant   |
+| ADR-039 | Account-Wechsel zwischen Tabs erkennen              | 8           | Akzeptiert                               | umgesetzt |
 
 ---
 
@@ -1205,6 +1206,42 @@ Der Umfang entspricht etwa Phase 5.
 
 - Für eine Umsetzung braucht es vorher drei Entscheidungen: die Länge der Antwortfrist, das Verhalten bei falscher Antwort (nur ablehnen oder als Fehler zählen) und ob der Modus pro Match wählbar ist.
 - Ein wählbarer Modus "Antworten selbst geben" hält das schnelle Spiel gegen den Computer und bietet im Duell die Interaktion des Brettspiels.
+
+---
+
+## ADR-039 Account-Wechsel zwischen Tabs erkennen
+
+### Kontext
+
+Beim Test des Duells liefen zwei Accounts in zwei Tabs desselben Browsers. Beide Tabs landeten im selben Warteraum, und der Code lief ab. Der Server arbeitete korrekt. Ursache ist das Cookie `sid` (ADR-023). Ein Browser hat pro Seite nur ein Cookie, alle Tabs teilen es. Die zweite Anmeldung überschreibt die erste. Der erste Tab spricht danach als zweiter Account mit dem Server. Er zeigt aber weiter den alten Namen, denn `nutzer` liegt nur im Speicher des Tabs (ADR-024).
+
+Der Ablauf im Test:
+
+1. Tab 1 zeigt Account A und klickt "Spiel erstellen". Der Server legt das Duell für B an.
+2. Tab 2 mit B gibt den Code ein. Der Server meldet 409, weil B schon ein wartendes Duell hat.
+3. Das Dashboard lädt bei 409 still nach und zeigt das wartende Duell. B landet über "Fortsetzen" im eigenen Warteraum.
+
+### Entscheidung
+
+- Jeder Tab meldet An- und Abmeldung über einen `BroadcastChannel` mit dem Namen `irrgarten-anmeldung`. Die Nachricht enthält die Id des neuen Nutzers oder `null`.
+- Erhält ein Tab eine Id, die nicht zu seinem `nutzer` passt, lädt er die Startseite neu. Der Router fragt dann `/auth/me` und zeigt den echten Account.
+- Beim Beitreten zum Duell zeigt das Dashboard die Meldung einer 409 nach dem Nachladen an. Beim Erstellen bleibt das stille Nachladen.
+- Meldet das Polling der Spielansicht 401 oder 403, zeigt die Ansicht die Meldung und stoppt das Polling.
+- Für Tests mit zwei Accounts dient ein privates Fenster oder ein zweiter Browser.
+
+### Begründung
+
+- Das Cookie bleibt `HttpOnly`. Der Client kann es nicht lesen und merkt einen Wechsel nur über eine Nachricht der anderen Tabs.
+- `BroadcastChannel` braucht keinen Server und keine Bibliothek. Der Kanal erreicht nur Tabs derselben Origin im selben Browser, also genau die Tabs mit demselben Cookie.
+- Verworfen wurde eine Session pro Tab, etwa über ein Token in `sessionStorage`. Das ändert Vertrag und Anmeldung (ADR-013, ADR-023) und gibt das `HttpOnly`-Cookie auf.
+- Verworfen wurde ein Abgleich mit `/auth/me` bei jedem Fokuswechsel. Das kostet Abrufe und greift erst, wenn der Spieler den Tab wieder anklickt.
+- Beim Erstellen bedeutet eine 409 meist ein offenes Match aus einem anderen Tab. Das Nachladen zeigt es, eine Meldung wäre doppelt. Beim Beitreten erwartet der Spieler die Spielansicht. Ohne Meldung bleibt unklar, warum er im Dashboard steht.
+
+### Konsequenzen
+
+- Zwei Accounts in zwei Tabs desselben Browsers funktionieren weiterhin nicht. Der Fehler fällt jetzt aber sofort auf.
+- Ein Tab mit dem alten Account verliert beim Neuladen ungespeicherte Eingaben. Den Entwurf im Aufbau speichert der Server ohnehin bei jedem Klick.
+- Für den Abgleich der Tabs gibt es keinen automatischen Test. Ihn prüft ein Durchlauf von Hand mit zwei Tabs.
 
 ---
 

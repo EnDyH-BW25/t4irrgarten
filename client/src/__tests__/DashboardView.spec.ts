@@ -220,6 +220,32 @@ describe('DashboardView', () => {
       expect(router.currentRoute.value.path).toBe('/dashboard')
     })
 
+    it('409 beim Beitreten lädt nach und zeigt trotzdem die Meldung', async () => {
+      let aufrufe = 0
+      dashboardServer({
+        // Der Account hat in einem anderen Tab selbst ein Duell erstellt
+        '/api/matches/current': () =>
+          aufrufe++ === 0
+            ? keinMatch()
+            : Response.json(beispielMatch({ modus: 'duell', status: 'wartet' })),
+        '/api/matches/join': () =>
+          Response.json(
+            { fehler: { code: 'KONFLIKT', nachricht: 'Du kannst diesem Spiel nicht beitreten.' } },
+            { status: 409 },
+          ),
+      })
+      const { wrapper, router } = await aufbauen()
+      await liveOeffnen(wrapper)
+      await wrapper.find('[data-test=duell-beitreten]').trigger('click')
+      await wrapper.find('[data-test=code]').setValue('K7M2P')
+      await wrapper.find('form').trigger('submit')
+      await flushPromises()
+
+      expect(wrapper.find('[data-test=laufend]').exists()).toBe(true)
+      expect(wrapper.find('[data-test=meldung]').text()).toContain('nicht beitreten')
+      expect(router.currentRoute.value.path).toBe('/dashboard')
+    })
+
     it('ein wartendes Duell erscheint als Warteraum mit Abbrechen', async () => {
       dashboardServer({
         '/api/matches/current': () =>
