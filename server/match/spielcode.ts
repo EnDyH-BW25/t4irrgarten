@@ -1,3 +1,8 @@
+/**
+ * SPIELCODE für Duell und Turnier: fünf Zeichen wie "K7M2P" (ADR-009)
+ * Der Ersteller gibt den Code mündlich oder per Chat weiter, der Gegner tippt ihn ein.
+ * Darum: kurz, ohne verwechselbare Zeichen, Groß-/Kleinschreibung egal.
+ */
 import type { Zufall } from '../spiellogik/generator.ts'
 
 /** Erlaubte Zeichen: ohne 0, O, 1 und I, weil man sie beim Abtippen verwechselt (ADR-009) */
@@ -20,6 +25,7 @@ export function codeErzeugen(zufall: Zufall = Math.random): string {
  * möglichen Codes trifft schon der erste Versuch fast immer.
  */
 export function freienCodeErzeugen(
+  // Funktion als Parameter: Die Datei kennt keinen Speicher. Die Route sagt, was vergeben ist.
   istVergeben: (code: string) => boolean,
   zufall: Zufall = Math.random,
 ): string {

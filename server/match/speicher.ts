@@ -1,3 +1,9 @@
+/**
+ * MATCHSPEICHER: alle Matches als Map im Arbeitsspeicher (ADR-026)
+ * Bewusst ohne Datei: Ein laufendes Spiel dauert Minuten, ein Neustart ist selten.
+ * Dauerhaft bleibt nur das Ergebnis (ErgebnisSpeicher). Bekannte Schwäche, im Rückblick genannt.
+ * Der Speicher gibt das Objekt selbst heraus. ablauf.ts ändert es direkt (keine Kopie).
+ */
 import type { MatchIntern } from './typen.ts'
 
 /** Hält alle Matches im Arbeitsspeicher unter ihrer Id. Ein Neustart löscht sie (ADR-026). */
@@ -22,7 +28,10 @@ export class MatchSpeicher {
     return null
   }
 
-  /** Liefert das Match, in dem der Nutzer gerade spielt; beendete und abgebrochene zählen nicht */
+  /**
+   * Liefert das Match, in dem der Nutzer gerade spielt; beendete und abgebrochene zählen nicht
+   * Durchsucht alle Matches (lineare Suche). Bei wenigen gleichzeitigen Spielen kein Problem.
+   */
   offenesMatchVon(nutzerId: string): MatchIntern | null {
     for (const match of this.matches.values()) {
       const spieltMit = match.spieler.some((s) => s.id === nutzerId)

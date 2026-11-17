@@ -1,3 +1,15 @@
+/**
+ * FRISTPRÜFUNG OHNE TIMER (ADR-028): "Lazy Evaluation" der Fristen
+ * Statt setTimeout pro Match prüft der Server bei jedem Zugriff, welche Frist inzwischen
+ * abgelaufen ist, und trägt die Folgen nach. Da beide Clients alle 1,5 s pollen, passiert
+ * das praktisch sofort.
+ * Vorteile: kein Timer-Aufräumen, Tests mit fester Uhr statt echtem Warten, kein Zustand,
+ * der beim Neustart verloren geht.
+ * Wichtig: Folgen zählen ab dem Fristende, nicht ab dem Abruf (z. B. beendetAm = zugEndeAm).
+ *
+ * Fristen je Status: wartet => Code, aufbau => Aufbau + Nachbesserung,
+ * startbereit => Bereitschaft, laeuft => Zugfrist + Abwesenheit
+ */
 import type { Endegrund } from '../../shared/types.ts'
 import { labyrinthVervollstaendigen } from '../spiellogik/automatik.ts'
 import type { Zufall } from '../spiellogik/generator.ts'
@@ -20,6 +32,8 @@ export function fristenPruefen(
 ): boolean {
   const vorher = match.version
   // Reihenfolge wie im Spielablauf. Jede Prüfung kann den Status für die nächste ändern.
+  // Bewusst vier einzelne if (kein else): Nach 10 Minuten ohne Abruf laufen so mehrere
+  // Fristen in einem Aufruf nacheinander ab.
   if (match.status === 'wartet') codefristPruefen(match, jetzt)
   if (match.status === 'aufbau') aufbaufristPruefen(match, jetzt, zufall)
   if (match.status === 'startbereit') startfristPruefen(match, jetzt)
@@ -111,6 +125,8 @@ function spielfristenPruefen(match: MatchIntern, jetzt: Date): void {
     verstoesse.push({ verliererId: s.id, grund: 'abwesenheit', am })
   }
 
+  // Nur abgelaufene Fristen, die früheste zuerst. Beispiel: Spieler A ist am Zug und schließt
+  // den Tab. Seine Abruffrist (15 s) läuft vor der Zugfrist (60 s) ab => Grund abwesenheit.
   const erster = verstoesse
     .filter((v) => v.am <= jetzt.getTime())
     .sort((a, b) => a.am - b.am)[0]

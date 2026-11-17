@@ -1,3 +1,18 @@
+/**
+ * MATCH-ABLAUF: die Zustandsmaschine eines Matches (größte Datei des Servers)
+ *
+ *   wartet ──beitreten──> aufbau ──alle gesetzt──> startbereit ──alle bereit──> laeuft ──Schatz──> beendet
+ *      │                    │                          │                           │
+ *      └─Code abgelaufen────┴──────── aufgeben / Frist ┴───────────────────────────┴──> beendet/abgebrochen
+ *
+ * Jede Funktion hier:
+ * 1. prüft, ob der Übergang im aktuellen Status erlaubt ist (sonst ApiFehler 409)
+ * 2. ändert das Match-Objekt direkt (kein Kopieren, der MatchSpeicher hält dasselbe Objekt)
+ * 3. erhöht match.version, damit Polling-Clients die Änderung bemerken
+ * Die Regeln selbst (Lösbarkeit, Anfrage, Computerzug) kommen aus spiellogik/.
+ * Ab hier wirft der Server ApiFehler; spiellogik/ liefert nur null/false.
+ * Abschnitte: Erstellen, Aufbau, Bereitschaft, Aufgeben, Anfragen, Ende.
+ */
 import { WIEDERGABE_PAUSE_MS } from '../../shared/types.ts'
 import type {
   AnfrageErgebnis,
@@ -27,6 +42,7 @@ export const AUFBAU_DAUER_MS = 3 * 60 * 1000
 
 /** Legt ein Match gegen den Computer an. Der Computer hat sein Labyrinth sofort gesetzt. */
 export function computerMatchErstellen(
+  // Pick: nur id und name werden gebraucht; Tests müssen keinen ganzen Nutzer bauen
   nutzer: Pick<Nutzer, 'id' | 'name'>,
   schwierigkeit: Schwierigkeit,
   jetzt: Date,
@@ -134,7 +150,10 @@ export function beitreten(match: MatchIntern, nutzer: Pick<Nutzer, 'id' | 'name'
   match.version++
 }
 
-/** Liefert den anfragenden Spieler und seinen Gegner. Fremde Nutzer erhalten 403. */
+/**
+ * Liefert den anfragenden Spieler und seinen Gegner. Fremde Nutzer erhalten 403.
+ * Autorisierung (darf DIESER Nutzer DIESES Match sehen?), zusätzlich zur Anmeldung (401).
+ */
 export function teilnehmer(match: MatchIntern, nutzerId: string) {
   const ich = match.spieler.find((s) => s.id === nutzerId)
   if (!ich) throw new ApiFehler(403, 'VERBOTEN', 'Du spielst in diesem Match nicht mit.')
@@ -153,6 +172,8 @@ export function entwurfSpeichern(match: MatchIntern, nutzerId: string, eingabe: 
   if (!form.ok) {
     throw new ApiFehler(400, 'VALIDIERUNG', 'Der Entwurf ist ungültig.', { details: form.details })
   }
+  // Kein 422 bei unlösbarem Entwurf: Der Aufbau ist ein Zwischenstand. Die Ansicht liefert
+  // die Prüfung (rot/grün) mit, erst labyrinthSetzen verlangt Lösbarkeit.
   ich.entwurf = form.entwurf
   match.version++
 }
@@ -162,6 +183,7 @@ export function labyrinthSetzen(match: MatchIntern, nutzerId: string, jetzt: Dat
   const { ich } = teilnehmer(match, nutzerId)
   aufbauPruefen(match, ich)
 
+  // Erneut prüfen, obwohl der Client den Button sperrt: Dem Client wird nie vertraut
   if (ich.entwurf.schatz === null) {
     throw new ApiFehler(422, 'SCHATZ_FEHLT', 'Platziere zuerst deinen Schatz.')
   }
@@ -303,6 +325,7 @@ export function anfrageStellen(
     throw new ApiFehler(409, 'KONFLIKT', `Erwartet wird Anfrage ${match.anfrageNr}.`)
   }
 
+  // Der Server ist Schiedsrichter: Er kennt das echte Labyrinth des Gegners, der Client nie
   const labyrinth = gesetztesLabyrinth(gegner!)
   const ergebnis = anfrageAuswerten(ich.karte.position, ziel, labyrinth.mauern, labyrinth.schatz)
   if (!ergebnis) {
@@ -326,6 +349,7 @@ export function anfrageStellen(
 
   // Die Bedenkzeit beginnt erst, wenn der Client den Zug des Computers abgespielt hat.
   // Davor zeigt er meine eigene Anfrage mit Antwort, daher eine Anfrage mehr (ADR-037).
+  // Beispiel: Computer stellt 3 Anfragen => (3 + 1) x 3,6 s = 14,4 s später startet die Frist (ADR-030)
   const computerZuege = computerAnfragen?.length ?? 0
   const wiedergabeMs = computerZuege > 0 ? (computerZuege + 1) * WIEDERGABE_PAUSE_MS : 0
   zugFristStarten(match, new Date(jetzt.getTime() + wiedergabeMs))
@@ -379,7 +403,10 @@ function fristenLoeschen(match: MatchIntern): void {
   for (const s of match.spieler) s.nachbesserungEndeAm = null
 }
 
-/** Nach dem Setzen liegt der Schatz sicher; vorher wäre das ein Programmfehler */
+/**
+ * Nach dem Setzen liegt der Schatz sicher; vorher wäre das ein Programmfehler
+ * Darum throw Error (wird 500) statt ApiFehler: Das ist ein Bug, kein Fehler des Nutzers.
+ */
 export function gesetztesLabyrinth(spieler: SpielerDaten): Labyrinth {
   const { schatz, mauern } = spieler.entwurf
   if (!spieler.gesetzt || schatz === null) throw new Error(`${spieler.id} hat nicht gesetzt.`)

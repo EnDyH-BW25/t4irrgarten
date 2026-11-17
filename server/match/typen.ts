@@ -1,3 +1,10 @@
+/**
+ * INTERNE MATCH-TYPEN: wie der Server ein Match speichert (nur im Server, nicht in shared/)
+ * Unterschied zum Typ Match in shared/types.ts:
+ *   MatchIntern  enthält beide Labyrinthe (geheim!), Date-Objekte, letzterAbrufAm
+ *   Match        ist die Sicht eines Spielers für den Client, ohne Geheimnisse, Zeiten als Text
+ * Die Übersetzung macht ansicht.ts. So kann kein Geheimnis versehentlich im JSON landen.
+ */
 import type {
   AnfrageErgebnis,
   BekannteKarte,
@@ -26,7 +33,7 @@ export type SpielerDaten = {
 /** Ein Match aus Sicht des Servers, mit beiden Labyrinthen. Speichert nur Fakten. */
 export type MatchIntern = {
   id: string
-  version: number // steigt bei jeder Änderung
+  version: number // steigt bei jeder Änderung; Grundlage für Polling mit since und 304
   modus: Modus
   schwierigkeit: Schwierigkeit | null // nur im Modus computer gesetzt
   status: MatchStatus

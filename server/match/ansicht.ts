@@ -1,3 +1,10 @@
+/**
+ * ANSICHT: übersetzt MatchIntern in die Sicht EINES Spielers (Typ Match aus shared/)
+ * Wichtigste Sicherheitsstelle des Spiels: Das Labyrinth des Gegners darf vor Spielende nie
+ * herausgehen, sonst könnte jemand in den DevTools den Schatz ablesen.
+ * Darum Positivliste: jedes Feld einzeln, kein { ...match }. Ein Test sucht im JSON nach
+ * Lecks (ansicht_test.ts). Zusätzlich: Date wird ISO-Text, ich/gegner je nach Anfragendem.
+ */
 import type { Bereitschaft, Match } from '../../shared/types.ts'
 import { loesbarkeitPruefen } from '../spiellogik/regeln.ts'
 import { gesetztesLabyrinth, teilnehmer } from './ablauf.ts'
@@ -22,7 +29,7 @@ export function ansichtFuer(match: MatchIntern, nutzerId: string, jetzt: Date): 
   return {
     id: match.id,
     version: match.version,
-    serverZeit: jetzt.toISOString(),
+    serverZeit: jetzt.toISOString(), // der Client berechnet daraus versatzMs für die Countdowns
     modus: match.modus,
     schwierigkeit: match.schwierigkeit,
     status: match.status,
@@ -47,8 +54,9 @@ export function ansichtFuer(match: MatchIntern, nutzerId: string, jetzt: Date): 
     gegner: gegner ? bereitschaft(gegner) : null,
 
     // Labyrinth und Karten
+    // Live-Prüfung: bei jeder Antwort im Aufbau frisch berechnet, nicht gespeichert
     pruefung: match.status === 'aufbau' ? loesbarkeitPruefen(ich.entwurf) : null,
-    meinLabyrinth: ich.entwurf,
+    meinLabyrinth: ich.entwurf, // nur MEIN Labyrinth, das des Gegners fehlt hier bewusst
     bekannteKarte: ich.karte,
     gegnerKarte: gegner?.karte ?? null,
     // Live-Sicht: Die Anfragen des Gegners verraten nur, was er schon über mein Labyrinth weiß

@@ -1,3 +1,17 @@
+/**
+ * MATCH-ROUTEN unter /api/matches (alle nur angemeldet)
+ *   POST /                    Match anlegen (computer oder duell), 409 wenn schon etwas offen
+ *   POST /join                Duell per Code beitreten
+ *   GET  /current             offenes Match für das Dashboard (404 = keins)
+ *   GET  /:id?since=v         Stand abrufen; 304, wenn version unverändert (Polling)
+ *   PUT  /:id/labyrinth       Entwurf speichern (Aufbau, bei jedem Klick)
+ *   POST /:id/labyrinth/place "Irrgarten setzen"
+ *   POST /:id/ready           "Spiel starten" im Overlay
+ *   POST /:id/queries         Anfrage stellen
+ *   POST /:id/resign          Aufgeben
+ * Muster jeder /:id-Route: matchHolen (404/403, Fristen, Lebenszeichen) -> Funktion aus
+ * ablauf.ts -> ansicht (Ergebnis sichern, Sicht als JSON). Die Route selbst ist dünn.
+ */
 import { Hono } from '@hono/hono'
 import type { Context } from '@hono/hono'
 import type { AnfrageAntwort, MatchAnlegen, Schwierigkeit } from '../../shared/types.ts'
@@ -37,6 +51,7 @@ const SCHWIERIGKEITEN: Schwierigkeit[] = ['einfach', 'standard', 'schwer']
 export function matchRouten(sessions: Sessions, nutzerSpeicher: NutzerSpeicher, s: Spielstand) {
   const { matches, turniere, uhr, zufall } = s
   const routen = new Hono<AuthUmgebung>()
+  // use: Middleware für ALLE Routen dieser Gruppe. Danach ist c.get('nutzer') immer gesetzt.
   routen.use(anmeldungPruefen(sessions, nutzerSpeicher))
 
   /**
@@ -126,6 +141,7 @@ export function matchRouten(sessions: Sessions, nutzerSpeicher: NutzerSpeicher, 
   routen.get('/:id', async (c) => {
     // matchHolen prüft die Teilnahme zuerst: Fremde erkennen nicht einmal an der 304, ob sich etwas tut
     const match = await matchHolen(c)
+    // Client kennt diese Version schon => 304 ohne Body (spart Daten bei jedem Poll)
     if (sinceLesen(c.req.query('since')) === match.version) return c.body(null, 304)
     return ansicht(c, match)
   })
@@ -159,6 +175,7 @@ export function matchRouten(sessions: Sessions, nutzerSpeicher: NutzerSpeicher, 
       zufall,
     )
     await ergebnisseSichern(s, match)
+    // Antwort = Ergebnis der Anfrage + Computerzug (falls einer folgte) + neuer Match-Stand
     const antwort: AnfrageAntwort = {
       ...ergebnis,
       computerAnfragen,
