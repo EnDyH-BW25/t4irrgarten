@@ -4,7 +4,6 @@ import type { AnfrageAntwort, MatchAnlegen, Schwierigkeit } from '../../shared/t
 import { anmeldungPruefen, type AuthUmgebung } from '../auth/anmeldung.ts'
 import type { NutzerSpeicher } from '../auth/nutzerSpeicher.ts'
 import type { Sessions } from '../auth/sessions.ts'
-import type { ErgebnisSpeicher } from '../ergebnis/speicher.ts'
 import { ApiFehler } from '../fehler.ts'
 import type { Zufall } from '../spiellogik/generator.ts'
 import {
@@ -18,11 +17,15 @@ import {
   labyrinthSetzen,
   teilnehmer,
 } from './ablauf.ts'
+import {
+  ergebnisseSichern,
+  offenesMatch,
+  offenesTurnier,
+  type Spielstand,
+} from '../turnier/nachtragen.ts'
 import { ansichtFuer } from './ansicht.ts'
-import { ergebnisseAus } from './ergebnis.ts'
 import { abrufMerken, fristenPruefen } from './fristpruefung.ts'
 import { CODE_ZEICHEN, codeNormieren, freienCodeErzeugen } from './spielcode.ts'
-import type { MatchSpeicher } from './speicher.ts'
 import type { MatchIntern } from './typen.ts'
 
 /** Uhr und Zufall von außen, damit Tests beides festlegen können */
@@ -31,13 +34,8 @@ export type Umgebung = { uhr: () => Date; zufall: Zufall }
 const SCHWIERIGKEITEN: Schwierigkeit[] = ['einfach', 'standard', 'schwer']
 
 /** Alle Routen unter /api/matches. Jede verlangt eine Anmeldung. */
-export function matchRouten(
-  sessions: Sessions,
-  nutzerSpeicher: NutzerSpeicher,
-  matches: MatchSpeicher,
-  ergebnisse: ErgebnisSpeicher,
-  { uhr, zufall }: Umgebung,
-) {
+export function matchRouten(sessions: Sessions, nutzerSpeicher: NutzerSpeicher, s: Spielstand) {
+  const { matches, turniere, uhr, zufall } = s
   const routen = new Hono<AuthUmgebung>()
   routen.use(anmeldungPruefen(sessions, nutzerSpeicher))
 
@@ -56,40 +54,38 @@ export function matchRouten(
     fristenPruefen(match, jetzt, zufall)
     abrufMerken(match, nutzerId, jetzt)
     // Hat eine Frist das Match beendet, steht das Ergebnis auch dann fest, wenn die Route danach 409 meldet
-    await ergebnisseSichern(match)
+    await ergebnisseSichern(s, match)
     return match
   }
 
-  /** Offenes Match des Nutzers nach dem Nachtragen der Fristen. Ein abgelaufenes zählt nicht. */
-  async function offenesMatch(nutzerId: string): Promise<MatchIntern | null> {
-    const match = matches.offenesMatchVon(nutzerId)
-    if (!match) return null
-    fristenPruefen(match, uhr(), zufall)
-    await ergebnisseSichern(match)
-    return matches.offenesMatchVon(nutzerId)
-  }
-
-  /** Ist das Match beendet, trägt der Server die Ergebnisse ein. Ein zweiter Aufruf ändert nichts. */
-  async function ergebnisseSichern(match: MatchIntern): Promise<void> {
-    if (match.status === 'beendet') await ergebnisse.eintragen(ergebnisseAus(match))
+  /**
+   * Wer in einem offenen Match oder Turnier steckt, startet nichts Neues (409). Ein Turnier sperrt
+   * auch zwischen zwei Runden, wenn gerade kein Match offen ist.
+   */
+  async function nichtsOffen(nutzerId: string, nachricht: string): Promise<void> {
+    if (await offenesMatch(s, nutzerId) || await offenesTurnier(s, nutzerId)) {
+      throw new ApiFehler(409, 'KONFLIKT', nachricht)
+    }
   }
 
   /** Antwortet mit der Sicht des angemeldeten Spielers. Endete das Match gerade, erst das Ergebnis. */
   async function ansicht(c: Context<AuthUmgebung>, match: MatchIntern, status: 200 | 201 = 200) {
-    await ergebnisseSichern(match)
+    await ergebnisseSichern(s, match)
     return c.json(ansichtFuer(match, c.get('nutzer').id, uhr()), status)
   }
 
   routen.post('/', async (c) => {
     const nutzer = c.get('nutzer')
     const eingabe = matchAnlegenLesen(await jsonLesen(c))
-    if (await offenesMatch(nutzer.id)) {
-      throw new ApiFehler(409, 'KONFLIKT', 'Du spielst bereits ein Match.')
-    }
+    await nichtsOffen(nutzer.id, 'Du spielst bereits ein Match oder Turnier.')
 
     if (eingabe.modus === 'duell') {
       // Der Code darf keinem anderen wartenden Duell gehören
-      const code = freienCodeErzeugen((kandidat) => matches.nachCode(kandidat) !== null, zufall)
+      // Der Code darf auch keinem wartenden Turnier gehören, sonst wäre er doppeldeutig
+      const code = freienCodeErzeugen(
+        (k) => matches.nachCode(k) !== null || turniere.nachCode(k) !== null,
+        zufall,
+      )
       const match = duellErstellen(nutzer, code, uhr())
       matches.anlegen(match)
       return ansicht(c, match, 201)
@@ -113,9 +109,7 @@ export function matchRouten(
       throw new ApiFehler(404, 'CODE_UNGUELTIG', 'Der Spielcode ist ungültig oder abgelaufen.')
     }
     // Auch das eigene wartende Duell zählt als offenes Match: Der Ersteller bekommt hier 409
-    if (await offenesMatch(nutzer.id)) {
-      throw new ApiFehler(409, 'KONFLIKT', 'Du kannst diesem Spiel nicht beitreten.')
-    }
+    await nichtsOffen(nutzer.id, 'Du kannst diesem Spiel nicht beitreten.')
 
     beitreten(match, nutzer, uhr())
     return ansicht(c, match)
@@ -124,7 +118,7 @@ export function matchRouten(
   // Steht vor /:id, sonst hielte Hono "current" für eine Match-Id
   // Kein Lebenszeichen: Das Dashboard schaut nur nach, der Spieler ist nicht im Spiel
   routen.get('/current', async (c) => {
-    const match = await offenesMatch(c.get('nutzer').id)
+    const match = await offenesMatch(s, c.get('nutzer').id)
     if (!match) throw new ApiFehler(404, 'NICHT_GEFUNDEN', 'Du hast kein offenes Match.')
     return ansicht(c, match)
   })
@@ -164,7 +158,7 @@ export function matchRouten(
       uhr(),
       zufall,
     )
-    await ergebnisseSichern(match)
+    await ergebnisseSichern(s, match)
     const antwort: AnfrageAntwort = {
       ...ergebnis,
       computerAnfragen,

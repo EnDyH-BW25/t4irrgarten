@@ -8,6 +8,9 @@ import { ErgebnisSpeicher } from './ergebnis/speicher.ts'
 import { fehlerBehandeln, nichtGefunden } from './fehler.ts'
 import { matchRouten, type Umgebung } from './match/routen.ts'
 import { MatchSpeicher } from './match/speicher.ts'
+import type { Spielstand } from './turnier/nachtragen.ts'
+import { turnierRouten } from './turnier/routen.ts'
+import { TurnierSpeicher } from './turnier/speicher.ts'
 
 /** Pfade relativ zum Ordner server/, dort startet deno task dev */
 const DATEN_ORDNER = 'data'
@@ -20,6 +23,7 @@ const ERGEBNIS_DATEI = `${DATEN_ORDNER}/ergebnisse.json`
  */
 export type AppOptionen = Partial<Umgebung> & {
   matches?: MatchSpeicher
+  turniere?: TurnierSpeicher
   ergebnisse?: ErgebnisSpeicher
 }
 
@@ -29,6 +33,7 @@ export function appErstellen(
   speicher: NutzerSpeicher,
   {
     matches = new MatchSpeicher(),
+    turniere = new TurnierSpeicher(),
     ergebnisse = ErgebnisSpeicher.imSpeicher(),
     uhr = () => new Date(),
     zufall = Math.random,
@@ -42,7 +47,10 @@ export function appErstellen(
 
   app.get('/health', (c) => c.json({ status: 'ok', serverZeit: new Date().toISOString() }))
   app.route('/auth', authRouten(sessions, speicher))
-  app.route('/matches', matchRouten(sessions, speicher, matches, ergebnisse, { uhr, zufall }))
+  // Match- und Turnier-Routen teilen sich denselben Spielstand
+  const stand: Spielstand = { matches, turniere, ergebnisse, uhr, zufall }
+  app.route('/matches', matchRouten(sessions, speicher, stand))
+  app.route('/competitions', turnierRouten(sessions, speicher, stand))
   app.route('/results', ergebnisRouten(sessions, speicher, ergebnisse))
 
   return app
