@@ -1,3 +1,12 @@
+<!--
+  DASHBOARDVIEW (Route /dashboard): Startpunkt nach der Anmeldung
+  Zeigt genau einen von drei Blöcken (v-if / v-else-if / v-else):
+  1. Laufendes Spiel: Fortsetzen oder Aufgeben
+  2. Laufendes Turnier: zur Turnierseite
+  3. Sonst: Neues Spiel (Computer, Duell erstellen/beitreten) oder Neues Turnier
+  Darunter Statistik (Siege, Niederlagen, Quote) und die letzten 10 Spiele.
+  Regel: Ein Nutzer hat höchstens ein offenes Match oder Turnier. Der Server sperrt mit 409.
+-->
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -25,8 +34,8 @@ const schwierigkeit = ref<Schwierigkeit>(nutzer.value?.schwierigkeit ?? 'standar
 const laufend = ref<Match | null>(null)
 /** Wartendes oder laufendes Turnier; sperrt neue Spiele auch zwischen zwei Runden */
 const turnier = ref<Turnier | null>(null)
-const laedt = ref(true)
-/** Welche Auswahl unter "Neues Spiel" offen ist */
+const laedt = ref(true) // true von Anfang an: Erst nach dem Laden ist klar, welcher Block passt
+/** Welche Auswahl unter "Neues Spiel" offen ist (aufklappbare Menüs, nur Anzeige) */
 const auswahlOffen = ref(false)
 const liveOffen = ref(false)
 const beitretenOffen = ref(false)
@@ -36,9 +45,10 @@ const code = ref('')
 const turnierOffen = ref(false)
 const turnierBeitretenOffen = ref(false)
 const turnierCode = ref('')
-const sendet = ref(false)
+const sendet = ref(false) // sperrt alle Start-Buttons während eines Requests
 const meldung = ref<string | null>(null)
 
+/** Gemeinsame Fehlerausgabe: Text vom Server oder allgemeiner Text */
 function fehlerZeigen(e: unknown) {
   meldung.value = e instanceof ApiFehler ? e.message : 'Unbekannter Fehler.'
 }
@@ -47,6 +57,10 @@ function fehlerZeigen(e: unknown) {
 const statistik = ref<Statistik | null>(null)
 const letzte = ref<Ergebnis[]>([])
 
+/**
+ * Lädt alles für das Dashboard. Die Reihenfolge ist Absicht (ADR-033):
+ * erst Match, dann Turnier (beide nacheinander), dann Statistik und Liste (parallel).
+ */
 async function laden() {
   laedt.value = true
   meldung.value = null
@@ -56,6 +70,8 @@ async function laden() {
     laufend.value = await offenesMatch()
     // Danach das Turnier: Der Abruf legt fällige Runden an und trägt die Platzierung ein
     turnier.value = await offenesTurnier()
+    // Promise.all: beide Requests gleichzeitig starten und auf beide warten (spart Zeit).
+    // [s, l] = Destructuring: erstes Ergebnis in s, zweites in l
     const [s, l] = await Promise.all([statistikLaden(), ergebnisseLaden()])
     statistik.value = s
     letzte.value = l
@@ -70,6 +86,8 @@ async function laden() {
  * Gemeinsamer Ablauf für alle Wege ins Spiel: Server fragen, danach zur Seite, deren Pfad
  * `anlegen` liefert. Im Duell zeigt die Spielansicht zuerst den Warteraum, im Turnier die
  * Turnierseite.
+ * `anlegen` ist eine Funktion als Parameter (Callback). So steht try/catch, Sperre und
+ * 409-Behandlung nur einmal hier, statt fünfmal in jeder Start-Funktion (DRY).
  */
 async function starten(anlegen: () => Promise<string>, meldungBei409 = false) {
   sendet.value = true
@@ -91,6 +109,7 @@ async function starten(anlegen: () => Promise<string>, meldungBei409 = false) {
   }
 }
 
+// Die fünf Wege ins Spiel. Jeder liefert nur den Zielpfad, den Rest erledigt starten().
 function gegenComputerStarten() {
   return starten(async () => {
     const match = await matchAnlegen(schwierigkeit.value)
@@ -104,6 +123,7 @@ function duellErstellen() {
   return starten(async () => `/spiel/${(await duellAnlegen()).id}`)
 }
 
+// true: Beim Beitreten auch bei 409 eine Meldung zeigen (z. B. Duell schon voll)
 function duellBeitreten() {
   return starten(async () => `/spiel/${(await beitreten(code.value)).id}`, true)
 }
@@ -128,7 +148,7 @@ const laufendGegner = computed(() => {
   if (m.status === 'wartet') return 'Duell im Warteraum'
   if (m.competitionId) return 'Turnier-Match'
   if (m.modus === 'computer') return 'Gegen den Computer'
-  const gegner = m.spieler.find((s) => s.id !== nutzer.value?.id)
+  const gegner = m.spieler.find((s) => s.id !== nutzer.value?.id) // der Spieler, der nicht ich bin
   return `Gegen ${gegner?.name ?? 'einen Gegner'}`
 })
 
@@ -154,6 +174,7 @@ onMounted(laden)
   <section class="mx-auto max-w-md space-y-6">
     <h1 class="font-titel text-2xl">Dashboard</h1>
 
+    <!-- Dropdown: v-model hält die Auswahl im ref schwierigkeit -->
     <label class="block">
       <span class="text-sm">Schwierigkeit</span>
       <select
@@ -262,6 +283,7 @@ onMounted(laden)
         </button>
       </div>
 
+      <!-- Code-Eingabe: maxlength 5, uppercase nur optisch; der Server normiert die Schreibweise -->
       <form
         v-if="auswahlOffen && liveOffen && beitretenOffen"
         class="flex gap-2"

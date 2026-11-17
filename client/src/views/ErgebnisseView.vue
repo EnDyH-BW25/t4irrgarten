@@ -1,3 +1,8 @@
+<!--
+  ERGEBNISSEVIEW (Route /ergebnisse): alle eigenen beendeten Spiele, neueste zuerst
+  Seitenweise Laden (ADR-033): erst 20 Einträge, "Mehr laden" holt die nächsten 20.
+  Jeder Eintrag klappt per details/summary auf und zeigt Datum, Gegner, Anfragen, Endegrund.
+-->
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
@@ -10,8 +15,8 @@ import { ergebnisseLaden } from '@/ergebnisse'
 const SEITE = 20
 
 const router = useRouter()
-const liste = ref<Ergebnis[]>([])
-const laedt = ref(false)
+const liste = ref<Ergebnis[]>([]) // alle bisher geladenen Einträge
+const laedt = ref(false) // sperrt "Mehr laden" während eines Abrufs
 /** false, sobald eine Seite kürzer als SEITE zurückkam: Dann gibt es nichts mehr */
 const mehrDa = ref(true)
 const meldung = ref<string | null>(null)
@@ -25,7 +30,8 @@ async function naechsteSeite() {
     // Endete inzwischen ein Spiel, rutscht alles um einen Platz nach hinten (ADR-033).
     // Schon geladene Einträge kämen dann doppelt und fallen hier heraus.
     const neue = seite.filter((n) => !liste.value.some((e) => e.id === n.id))
-    liste.value.push(...neue)
+    liste.value.push(...neue) // ...neue: jeden Eintrag einzeln anhängen
+    // Volle Seite => vielleicht kommt noch mehr. Kürzere Seite => Ende erreicht, Button weg.
     mehrDa.value = seite.length === SEITE
   } catch (e) {
     meldung.value = e instanceof ApiFehler ? e.message : 'Unbekannter Fehler.'
@@ -34,10 +40,12 @@ async function naechsteSeite() {
   }
 }
 
+/** 'schwer' => 'Schwer'; leer, falls keine Schwierigkeit (Duell) */
 function schwierigkeitText(e: Ergebnis): string {
   return SCHWIERIGKEITEN.find((s) => s.wert === e.schwierigkeit)?.text ?? ''
 }
 
+// Lifecycle-Hook: Sobald die View im DOM hängt, die erste Seite laden
 onMounted(naechsteSeite)
 </script>
 
@@ -45,6 +53,7 @@ onMounted(naechsteSeite)
   <section class="mx-auto max-w-md space-y-4">
     <h1 class="font-titel text-2xl">Ergebnisse</h1>
 
+    <!-- Leerer Zustand: nur, wenn fertig geladen, kein Fehler und trotzdem nichts da -->
     <p
       v-if="!laedt && !meldung && liste.length === 0"
       data-test="keine-spiele"
@@ -53,6 +62,7 @@ onMounted(naechsteSeite)
       Noch keine Spiele beendet.
     </p>
 
+    <!-- v-for mit :key: Vue erkennt jeden Eintrag an seiner id wieder und zeichnet nur Neues -->
     <ul class="space-y-2">
       <li v-for="e in liste" :key="e.id" data-test="ergebnis" class="rounded-lg bg-white shadow">
         <!-- details/summary: Der Browser klappt selbst auf und zu, ohne eigenen Zustand -->
