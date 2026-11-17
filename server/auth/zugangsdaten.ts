@@ -1,3 +1,10 @@
+/**
+ * EINGABEPRÜFUNG für Login und Registrierung (reine Funktion, wirft nicht)
+ * Der Body kommt als unknown herein: Vom Client kann alles kommen, auch Unsinn.
+ * Die Funktion prüft Schritt für Schritt und liefert ein Ergebnis-Objekt statt zu werfen.
+ * Erst routen.ts macht daraus einen 400-Fehler. So bleibt diese Datei leicht testbar.
+ * Sie sammelt alle Probleme, damit der Client Name- und Passwortfehler gleichzeitig zeigt.
+ */
 import { NAME_LAENGE, PASSWORT_LAENGE } from '../../shared/types.ts'
 
 /** Ein Problem in der Eingabe, wie in details der Fehlerantwort */
@@ -5,12 +12,14 @@ type Detail = { feld: string; problem: string }
 
 export type Zugangsdaten = { name: string; passwort: string }
 
+// Discriminated Union: Am Feld ok erkennt TypeScript, ob zugangsdaten oder details da sind
 export type ZugangsdatenErgebnis =
   | { ok: true; zugangsdaten: Zugangsdaten }
   | { ok: false; details: Detail[] }
 
 /** Prüft Name und Passwort aus dem Request-Body. Sammelt alle Probleme. */
 export function zugangsdatenPruefen(eingabe: unknown): ZugangsdatenErgebnis {
+  // typeof null ist in JavaScript auch 'object', Arrays ebenso: darum drei Prüfungen
   if (typeof eingabe !== 'object' || eingabe === null || Array.isArray(eingabe)) {
     return { ok: false, details: [{ feld: 'body', problem: 'Erwartet wird ein JSON-Objekt.' }] }
   }
